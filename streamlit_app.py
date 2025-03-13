@@ -9,25 +9,22 @@ st.set_page_config(
     page_title="Supply Chain Forecasting",
     page_icon="📊",
     layout="wide",
-    initial_sidebar_state="expanded",
-    menu_items={
-        'About': """
-        # Supply Chain Forecasting with GenAI
-        
-        Created by Ignatius Jonathan Sugijono
-        
-        Version 0.1 - beta
-        
-        Built using Streamlit, Pandas, and Plotly for interactive visualizations.
-        
-        For feedback, contact: ignatiusjonathan07@gmail.com
-        """
-    }
+    initial_sidebar_state="expanded"
 )
 
 # Add a title to the app
 st.title("Supply Chain Forecasting with GenAI")
 st.markdown("---")
+
+# Add app description and author information
+st.markdown("""
+<div style="text-align: center; color: #4d4d4d; padding: 10px; margin-bottom: 20px;">
+    <p>Created by Ignatius Jonathan Sugijono</p>
+    <p>Version 0.1 - beta</p>
+    <p>Built using Streamlit, Pandas, and Plotly for interactive visualizations.</p>
+    <p>For feedback, contact: ignatiusjonathan07@gmail.com</p>
+</div>
+""", unsafe_allow_html=True)
 
 # Check for API key
 if not os.getenv("OPENAI_API_KEY"):
