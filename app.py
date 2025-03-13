@@ -311,7 +311,6 @@ if 'forecast_results' not in st.session_state:
     st.session_state.forecast_results = {}
 
 # Streamlit UI
-st.set_page_config(page_title="Time Series Forecasting AI", layout="wide")
 st.title("Time Series Forecasting - Generative AI")
 st.markdown("Upload your dataset, specify the target column and its calculation in the context, and customize the forecast.")
 
