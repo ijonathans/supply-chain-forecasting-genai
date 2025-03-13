@@ -18,7 +18,7 @@ st.markdown("---")
 
 # Add app description and author information
 st.markdown("""
-<div style="text-align: center; color: #4d4d4d; padding: 10px; margin-bottom: 20px;">
+<div style="text-align: left; color: #4d4d4d; padding: 10px; margin-bottom: 20px;">
     <p>Created by Ignatius Jonathan Sugijono</p>
     <p>Version 0.1 - beta</p>
     <p>Built using Streamlit, Pandas, and Plotly for interactive visualizations.</p>
