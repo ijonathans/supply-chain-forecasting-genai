@@ -9,7 +9,20 @@ st.set_page_config(
     page_title="Supply Chain Forecasting",
     page_icon="📊",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
+    menu_items={
+        'About': """
+        # Supply Chain Forecasting with GenAI
+        
+        Created by Ignatius Jonathan Sugijono
+        
+        Version 0.1 - beta
+        
+        Built using Streamlit, Pandas, and Plotly for interactive visualizations.
+        
+        For feedback, contact: ignatiusjonathan07@gmail.com
+        """
+    }
 )
 
 # Add a title to the app
