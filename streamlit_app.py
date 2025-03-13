@@ -313,17 +313,20 @@ try:
                 if combined_forecasts:
                     group_title = " & ".join(selected_group_columns)
                     group_labels = list(combined_forecasts.keys())
-                    selected_group = st.selectbox(
-                        f"Select {group_title} to view",
-                        options=["All"] + group_labels,
-                        key="combined_group_select"
-                    )
                     
+                    # Display heatmap first
                     if f"heatmap_data_{group_title}" in st.session_state:
                         forecasts_dict, agg_df_dict, all_labels, target_col, title = st.session_state[f"heatmap_data_{group_title}"]
                         heatmap_fig = create_forecast_heatmap(forecasts_dict, all_labels, target_col, title, agg_df_dict)
                         if not heatmap_fig:
                             st.warning("Heatmap generation failed.")
+                    
+                    # Move the selection box below the heatmap
+                    selected_group = st.selectbox(
+                        f"Select {group_title} to view",
+                        options=["All"] + group_labels,
+                        key="combined_group_select"
+                    )
                     
                     all_forecasts = pd.concat([forecast[['ds', 'yhat']].assign(group=group) for group, forecast in combined_forecasts.items()])
                     st.download_button(
@@ -383,17 +386,20 @@ try:
                 if primary_forecasts:
                     group_title = selected_group_columns[0]
                     group_labels = list(primary_forecasts.keys())
-                    selected_group = st.selectbox(
-                        f"Select {selected_group_columns[0]} to view",
-                        options=["All"] + group_labels,
-                        key="primary_group_select"
-                    )
                     
+                    # Display heatmap first
                     if f"heatmap_data_{group_title}" in st.session_state:
                         forecasts_dict, agg_df_dict, all_labels, target_col, title = st.session_state[f"heatmap_data_{group_title}"]
                         heatmap_fig = create_forecast_heatmap(forecasts_dict, all_labels, target_col, title, agg_df_dict)
                         if not heatmap_fig:
                             st.warning("Heatmap generation failed.")
+                    
+                    # Move the selection box below the heatmap
+                    selected_group = st.selectbox(
+                        f"Select {selected_group_columns[0]} to view",
+                        options=["All"] + group_labels,
+                        key="primary_group_select"
+                    )
                     
                     all_forecasts = pd.concat([forecast[['ds', 'yhat']].assign(group=group) for group, forecast in primary_forecasts.items()])
                     st.download_button(
@@ -447,17 +453,20 @@ try:
                 if secondary_forecasts:
                     group_title = selected_group_columns[1]
                     group_labels = list(secondary_forecasts.keys())
-                    selected_group = st.selectbox(
-                        f"Select {selected_group_columns[1]} to view",
-                        options=["All"] + group_labels,
-                        key="secondary_group_select"
-                    )
                     
+                    # Display heatmap first
                     if f"heatmap_data_{group_title}" in st.session_state:
                         forecasts_dict, agg_df_dict, all_labels, target_col, title = st.session_state[f"heatmap_data_{group_title}"]
                         heatmap_fig = create_forecast_heatmap(forecasts_dict, all_labels, target_col, title, agg_df_dict)
                         if not heatmap_fig:
                             st.warning("Heatmap generation failed.")
+                    
+                    # Move the selection box below the heatmap
+                    selected_group = st.selectbox(
+                        f"Select {selected_group_columns[1]} to view",
+                        options=["All"] + group_labels,
+                        key="secondary_group_select"
+                    )
                     
                     all_forecasts = pd.concat([forecast[['ds', 'yhat']].assign(group=group) for group, forecast in secondary_forecasts.items()])
                     st.download_button(

@@ -12,6 +12,8 @@ import io
 import os
 import traceback
 from dotenv import load_dotenv
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 # Load environment variables
 try:
@@ -160,7 +162,8 @@ def run_forecast(df, target_column, periods, frequency, data_color, forecast_col
         width_factor = min(max(1, num_data_points / 100), 3)  # Limit to 3x base width
         fig_width = base_width * width_factor
         
-        fig1, ax1 = plt.subplots(figsize=(fig_width, 6))
+        # Create matplotlib figure for standard display
+        fig1, ax1 = plt.subplots(figsize=(fig_width, 6), dpi=300)
         last_historical_date = df_prophet['ds'].max()
         historical_data = df_prophet[df_prophet['ds'] <= last_historical_date]
         forecast_data = forecast[forecast['ds'] > last_historical_date]
@@ -173,11 +176,79 @@ def run_forecast(df, target_column, periods, frequency, data_color, forecast_col
         ax1.set_xlabel('Date')
         ax1.set_ylabel(target_column)
         ax1.grid(True, linestyle='--', alpha=0.7)
+        # Add x-axis date formatting for better readability
         plt.gcf().autofmt_xdate()
         plt.tight_layout()
         
-        fig2 = model.plot_components(forecast, figsize=(10, 8))
-        return model, forecast, fig1, fig2
+        # Create Plotly figure for interactive zooming
+        plotly_fig = make_subplots(specs=[[{"secondary_y": False}]])
+        
+        # Add historical data trace
+        plotly_fig.add_trace(
+            go.Scatter(
+                x=historical_data['ds'],
+                y=historical_data['y'],
+                mode='lines',
+                name='Historical Data',
+                line=dict(color=data_color)
+            )
+        )
+        
+        # Add forecast trace
+        plotly_fig.add_trace(
+            go.Scatter(
+                x=forecast_data['ds'],
+                y=forecast_data['yhat'],
+                mode='lines',
+                name='Forecast',
+                line=dict(color=forecast_color)
+            )
+        )
+        
+        # Add confidence interval
+        plotly_fig.add_trace(
+            go.Scatter(
+                x=forecast_data['ds'].tolist() + forecast_data['ds'].tolist()[::-1],
+                y=forecast_data['yhat_upper'].tolist() + forecast_data['yhat_lower'].tolist()[::-1],
+                fill='toself',
+                fillcolor=f'rgba({int(forecast_color[1:3], 16)},{int(forecast_color[3:5], 16)},{int(forecast_color[5:7], 16)},0.2)',
+                line=dict(color='rgba(255,255,255,0)'),
+                name='Confidence Interval'
+            )
+        )
+        
+        # Update layout
+        plotly_fig.update_layout(
+            title=f'{target_column} Forecast',
+            xaxis_title='Date',
+            yaxis_title=target_column,
+            hovermode='x unified',
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            ),
+            width=fig_width*100,
+            height=600
+        )
+        
+        plotly_fig.update_xaxes(
+            rangeslider_visible=True,
+            rangeselector=dict(
+                buttons=list([
+                    dict(count=1, label="1m", step="month", stepmode="backward"),
+                    dict(count=6, label="6m", step="month", stepmode="backward"),
+                    dict(count=1, label="YTD", step="year", stepmode="todate"),
+                    dict(count=1, label="1y", step="year", stepmode="backward"),
+                    dict(step="all")
+                ])
+            )
+        )
+        
+        fig2 = model.plot_components(forecast, figsize=(10, 8), dpi=300)
+        return model, forecast, fig1, fig2, plotly_fig
     except Exception as e:
         st.error(f"Error in Prophet model: {e}")
         return None, None, None, None
@@ -226,7 +297,7 @@ def run_multi_group_forecast(df, group_columns, target_column, periods, frequenc
     width_factor = min(max(1, max_data_points / 100), 3)  # Limit to 3x base width
     fig_width = base_width * width_factor
     
-    fig_compare, ax_compare = plt.subplots(figsize=(fig_width, 6))
+    fig_compare, ax_compare = plt.subplots(figsize=(fig_width, 6), dpi=300)
     forecasts_dict = {}
     agg_df_dict = {}  # Store aggregated data per group
     
@@ -332,7 +403,7 @@ def create_forecast_heatmap(forecasts_dict=None, group_labels=None, target_colum
     pivot_df = all_forecasts.pivot(index='group', columns='ds', values='yhat')
     pivot_df.columns = pivot_df.columns.strftime('%Y-%m-%d')
     
-    fig, ax = plt.subplots(figsize=(14, len(selected_groups) * 0.5 + 2))
+    fig, ax = plt.subplots(figsize=(14, len(selected_groups) * 0.5 + 2), dpi=300)
     sns.heatmap(pivot_df, cmap="YlGnBu", annot=True, fmt=".0f", linewidths=.5, ax=ax)
     ax.set_title(f"{target_column} Forecast Heatmap by {group_title}")
     ax.set_ylabel("Group")
@@ -443,9 +514,9 @@ if run_button and df is not None:
             # Single forecast (no grouping)
             if not selected_group_columns or not selected_group_columns[0]:
                 agg_df = aggregate_data(df, target_column, frequency)
-                model, forecast, fig1, fig2 = run_forecast(agg_df, target_column, periods, frequency, data_color, forecast_color)
+                model, forecast, fig1, fig2, plotly_fig = run_forecast(agg_df, target_column, periods, frequency, data_color, forecast_color)
                 if model and forecast is not None:
-                    results_dict['single'] = (fig1, forecast)
+                    results_dict['single'] = (fig1, forecast, plotly_fig)
                     st.session_state.forecast_results = results_dict
                     st.experimental_rerun()
             
@@ -505,7 +576,7 @@ if 'forecast_results' in st.session_state and st.session_state.forecast_results:
     
     # Display based on filter selection
     if selected_filter == "Overall (No Grouping)" and 'single' in results:
-        fig1, forecast = results['single']
+        fig1, forecast, plotly_fig = results['single']
         st.subheader("Overall Forecast")
         if fig1:
             st.pyplot(fig1)
@@ -524,6 +595,10 @@ if 'forecast_results' in st.session_state and st.session_state.forecast_results:
                 file_name=f"forecast_{target_column}.csv",
                 mime="text/csv",
             )
+            
+            # Interactive Plotly figure
+            st.subheader("Interactive Forecast")
+            st.plotly_chart(plotly_fig, use_container_width=True)
     
     elif selected_group_columns:
         if selected_filter == f"Combined ({' & '.join(selected_group_columns)})" and 'combined' in results:
@@ -576,11 +651,12 @@ if 'forecast_results' in st.session_state and st.session_state.forecast_results:
                     st.write(f"Detailed view for {selected_group} has {len(group_data)} rows")
                     st.write(f"Group data sample:\n{group_data.head()}")
                     
-                    model, _, fig1, fig2 = run_forecast(group_data, target_column, periods, frequency, data_color, forecast_color)
+                    model, _, fig1, fig2, plotly_fig = run_forecast(group_data, target_column, periods, frequency, data_color, forecast_color)
                     if fig1:
                         st.pyplot(fig1)
                     if fig2:
                         st.pyplot(fig2)
+                    st.plotly_chart(plotly_fig, use_container_width=True)
         
         elif selected_filter == selected_group_columns[0] and 'primary' in results:
             primary_fig, primary_forecasts, primary_agg_df = results['primary']
@@ -625,11 +701,12 @@ if 'forecast_results' in st.session_state and st.session_state.forecast_results:
                     st.write(f"Detailed view for {selected_group} has {len(group_data)} rows")
                     st.write(f"Group data sample:\n{group_data.head()}")
                     
-                    model, _, fig1, fig2 = run_forecast(group_data, target_column, periods, frequency, data_color, forecast_color)
+                    model, _, fig1, fig2, plotly_fig = run_forecast(group_data, target_column, periods, frequency, data_color, forecast_color)
                     if fig1:
                         st.pyplot(fig1)
                     if fig2:
                         st.pyplot(fig2)
+                    st.plotly_chart(plotly_fig, use_container_width=True)
         
         elif len(selected_group_columns) >= 2 and selected_filter == selected_group_columns[1] and 'secondary' in results:
             secondary_fig, secondary_forecasts, secondary_agg_df = results['secondary']
@@ -674,11 +751,12 @@ if 'forecast_results' in st.session_state and st.session_state.forecast_results:
                     st.write(f"Detailed view for {selected_group} has {len(group_data)} rows")
                     st.write(f"Group data sample:\n{group_data.head()}")
                     
-                    model, _, fig1, fig2 = run_forecast(group_data, target_column, periods, frequency, data_color, forecast_color)
+                    model, _, fig1, fig2, plotly_fig = run_forecast(group_data, target_column, periods, frequency, data_color, forecast_color)
                     if fig1:
                         st.pyplot(fig1)
                     if fig2:
                         st.pyplot(fig2)
+                    st.plotly_chart(plotly_fig, use_container_width=True)
 
 # Reset button
 if st.session_state.forecast_results:
