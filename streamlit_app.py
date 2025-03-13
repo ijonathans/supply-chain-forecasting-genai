@@ -1,6 +1,7 @@
 import streamlit as st
 import os
 import sys
+import traceback
 
 # Set page configuration
 st.set_page_config(
@@ -27,8 +28,15 @@ if not os.getenv("OPENAI_API_KEY"):
     else:
         st.stop()
 
-# Redirect to the main app
-from app import *
+try:
+    # Redirect to the main app
+    st.write("Loading application...")
+    from app import *
+    st.write("Application loaded successfully!")
+except Exception as e:
+    st.error(f"❌ Error loading the application: {str(e)}")
+    st.code(traceback.format_exc())
+    st.info("Please check the logs for more details and ensure all dependencies are installed correctly.")
 
 # This file serves as an entry point for Streamlit Cloud
 # It will automatically use the app.py file for the main functionality

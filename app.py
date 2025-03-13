@@ -10,30 +10,55 @@ import numpy as np
 import streamlit as st
 import io
 import os
+import traceback
 from dotenv import load_dotenv
 
 # Load environment variables
-load_dotenv()
+try:
+    load_dotenv()
+    st.write("Environment variables loaded successfully.")
+except Exception as e:
+    st.error(f"Error loading environment variables: {str(e)}")
 
 # Initialize OpenAI client and LangChain LLM
-api_key = os.getenv("OPENAI_API_KEY")
-client = OpenAI(api_key=api_key)
-llm = ChatOpenAI(api_key=api_key, model="gpt-4o-mini", temperature=0.2)
+try:
+    api_key = os.getenv("OPENAI_API_KEY")
+    if api_key:
+        st.write("API key found in environment variables.")
+    else:
+        st.warning("API key not found in environment variables after load_dotenv().")
+    
+    client = OpenAI(api_key=api_key)
+    llm = ChatOpenAI(api_key=api_key, model="gpt-4o-mini", temperature=0.2)
+    st.write("OpenAI client and LangChain LLM initialized successfully.")
+except Exception as e:
+    st.error(f"Error initializing OpenAI client or LangChain LLM: {str(e)}")
+    st.code(traceback.format_exc())
 
 # Define prompt templates
-feature_prompt = PromptTemplate(
-    input_variables=["background", "columns", "target_column"],
-    template="Given this background about the dataset: {background}, available columns: {columns}, and the target column to create: {target_column}, generate Python code as plain text to perform feature engineering. Create the target column '{target_column}' in the DataFrame 'df' using the appropriate columns based on the background. Use only the columns provided in the 'columns' list and ensure the code is valid Python syntax (e.g., df['{target_column}'] = df['col1'] - df['col2']). Return only the code without explanations or formatting."
-)
+try:
+    feature_prompt = PromptTemplate(
+        input_variables=["background", "columns", "target_column"],
+        template="Given this background about the dataset: {background}, available columns: {columns}, and the target column to create: {target_column}, generate Python code as plain text to perform feature engineering. Create the target column '{target_column}' in the DataFrame 'df' using the appropriate columns based on the background. Use only the columns provided in the 'columns' list and ensure the code is valid Python syntax (e.g., df['{target_column}'] = df['col1'] - df['col2']). Return only the code without explanations or formatting."
+    )
 
-forecast_prompt = PromptTemplate(
-    input_variables=["task", "data", "context"],
-    template="Given this task: {task}, data: {data}, and context: {context}, generate the appropriate code or insight as plain text without markdown, backticks, or additional formatting. For Prophet code, use 'from prophet import Prophet', define 'model' as the Prophet instance, and 'forecast' as the prediction output, ensuring the DataFrame 'df' has 'ds' for dates and 'y' for the target column specified. For insights, provide a detailed analysis of trends, peaks, or dips in the forecast, with actionable business recommendations in a concise paragraph (3-5 sentences), avoiding code or technical jargon, and leveraging the context to tailor the insights."
-)
+    forecast_prompt = PromptTemplate(
+        input_variables=["task", "data", "context"],
+        template="Given this task: {task}, data: {data}, and context: {context}, generate the appropriate code or insight as plain text without markdown, backticks, or additional formatting. For Prophet code, use 'from prophet import Prophet', define 'model' as the Prophet instance, and 'forecast' as the prediction output, ensuring the DataFrame 'df' has 'ds' for dates and 'y' for the target column specified. For insights, provide a detailed analysis of trends, peaks, or dips in the forecast, with actionable business recommendations in a concise paragraph (3-5 sentences), avoiding code or technical jargon, and leveraging the context to tailor the insights."
+    )
+    st.write("Prompt templates defined successfully.")
+except Exception as e:
+    st.error(f"Error defining prompt templates: {str(e)}")
+    st.code(traceback.format_exc())
 
 # Create RunnableSequences
-feature_chain = RunnableSequence(feature_prompt | llm)
-forecast_chain = RunnableSequence(forecast_prompt | llm)
+try:
+    feature_chain = RunnableSequence(feature_prompt | llm)
+    forecast_chain = RunnableSequence(forecast_prompt | llm)
+    st.write("RunnableSequences created successfully.")
+except Exception as e:
+    st.error(f"Error creating RunnableSequences: {str(e)}")
+    st.code(traceback.format_exc())
 
 # Load the dataset and return columns
 def load_data(file=None, date_column='ds', filename='time_series_data.csv'):
@@ -368,42 +393,46 @@ with st.sidebar:
 
 if run_button and df is not None:
     with st.spinner("Generating forecasts..."):
-        df = engineer_features(df, target_column, context, columns)
-        st.write("Columns after feature engineering:", ", ".join(df.columns))
+        try:
+            df = engineer_features(df, target_column, context, columns)
+            st.write("Columns after feature engineering:", ", ".join(df.columns))
 
-        st.session_state.forecast_results = {
-            'df': df,
-            'target_column': target_column,
-            'periods': periods,
-            'frequency': frequency,
-            'data_color': data_color,
-            'forecast_color': forecast_color,
-            'selected_group_columns': selected_group_columns,
-            'top_n': top_n if 'top_n' in locals() else 10,
-            'context': context
-        }
-        
-        all_agg_df = aggregate_data(df, target_column, frequency)
-        all_model, all_forecast, all_fig1, all_fig2 = run_forecast(all_agg_df, target_column, periods, frequency, data_color, forecast_color)
-        st.session_state.forecast_results['all'] = (all_model, all_forecast, all_fig1, all_fig2, all_agg_df)
-        
-        if enable_groupby and selected_group_columns:
-            combined_fig, combined_forecasts, combined_agg_df = run_multi_group_forecast(
-                df, selected_group_columns, target_column, periods, frequency, context, data_color, forecast_color, top_n=top_n
-            )
-            st.session_state.forecast_results['combined'] = (combined_fig, combined_forecasts, combined_agg_df)
+            st.session_state.forecast_results = {
+                'df': df,
+                'target_column': target_column,
+                'periods': periods,
+                'frequency': frequency,
+                'data_color': data_color,
+                'forecast_color': forecast_color,
+                'selected_group_columns': selected_group_columns,
+                'top_n': top_n if 'top_n' in locals() else 10,
+                'context': context
+            }
             
-            if len(selected_group_columns) >= 1:
-                primary_fig, primary_forecasts, primary_agg_df = run_multi_group_forecast(
-                    df, selected_group_columns, target_column, periods, frequency, context, data_color, forecast_color, top_n=top_n, filter_group=selected_group_columns[0]
-                )
-                st.session_state.forecast_results['primary'] = (primary_fig, primary_forecasts, primary_agg_df)
+            all_agg_df = aggregate_data(df, target_column, frequency)
+            all_model, all_forecast, all_fig1, all_fig2 = run_forecast(all_agg_df, target_column, periods, frequency, data_color, forecast_color)
+            st.session_state.forecast_results['all'] = (all_model, all_forecast, all_fig1, all_fig2, all_agg_df)
             
-            if len(selected_group_columns) >= 2:
-                secondary_fig, secondary_forecasts, secondary_agg_df = run_multi_group_forecast(
-                    df, selected_group_columns, target_column, periods, frequency, context, data_color, forecast_color, top_n=top_n, filter_group=selected_group_columns[1]
+            if enable_groupby and selected_group_columns:
+                combined_fig, combined_forecasts, combined_agg_df = run_multi_group_forecast(
+                    df, selected_group_columns, target_column, periods, frequency, context, data_color, forecast_color, top_n=top_n
                 )
-                st.session_state.forecast_results['secondary'] = (secondary_fig, secondary_forecasts, secondary_agg_df)
+                st.session_state.forecast_results['combined'] = (combined_fig, combined_forecasts, combined_agg_df)
+                
+                if len(selected_group_columns) >= 1:
+                    primary_fig, primary_forecasts, primary_agg_df = run_multi_group_forecast(
+                        df, selected_group_columns, target_column, periods, frequency, context, data_color, forecast_color, top_n=top_n, filter_group=selected_group_columns[0]
+                    )
+                    st.session_state.forecast_results['primary'] = (primary_fig, primary_forecasts, primary_agg_df)
+                
+                if len(selected_group_columns) >= 2:
+                    secondary_fig, secondary_forecasts, secondary_agg_df = run_multi_group_forecast(
+                        df, selected_group_columns, target_column, periods, frequency, context, data_color, forecast_color, top_n=top_n, filter_group=selected_group_columns[1]
+                    )
+                    st.session_state.forecast_results['secondary'] = (secondary_fig, secondary_forecasts, secondary_agg_df)
+        except Exception as e:
+            st.error(f"Error generating forecasts: {e}")
+            st.code(traceback.format_exc())
 
 # Filter selection and display
 if 'forecast_results' in st.session_state and st.session_state.forecast_results:
