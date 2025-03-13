@@ -100,7 +100,7 @@ def aggregate_data(df, target_column, frequency='W', group_columns=None):
             df_copy['ds'] = df_copy['ds'].dt.floor('D')
         elif frequency == 'W':
             df_copy['ds'] = df_copy['ds'].dt.to_period('W').dt.to_timestamp()
-        elif frequency == 'ME':  # Updated from 'M' to 'ME'
+        elif frequency == 'M':  # Changed from 'ME' to 'M' for Prophet compatibility
             df_copy['ds'] = df_copy['ds'].dt.to_period('M').dt.to_timestamp()
         else:
             raise ValueError(f"Unsupported frequency: {frequency}")
@@ -352,7 +352,7 @@ selected_group_columns = [col.strip() for col in group_column_input.split(",")] 
 
 # Forecast parameters
 periods = st.sidebar.slider("Forecast periods", 1, 52, 12)
-frequency_options = ["D", "W", "ME"]
+frequency_options = ["D", "W", "M"]
 frequency = st.sidebar.selectbox("Frequency", frequency_options, index=1)
 
 # Colors

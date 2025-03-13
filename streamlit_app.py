@@ -85,7 +85,7 @@ try:
     
     # Forecast parameters
     periods = st.sidebar.slider("Forecast periods", 1, 52, 12, key="periods_slider")
-    frequency_options = ["D", "W", "ME"]
+    frequency_options = ["D", "W", "M"]  # Changed 'ME' to 'M' for Prophet compatibility
     frequency = st.sidebar.selectbox("Frequency", frequency_options, index=1, key="frequency_select")
     
     # Colors
@@ -102,6 +102,18 @@ try:
         try:
             df, columns = load_data(uploaded_file, date_column)
             st.sidebar.success(f"Data loaded successfully: {len(df)} rows, {len(columns)} columns")
+            
+            # Display column names in the main area
+            st.subheader("Dataset Columns")
+            col_display = st.expander("Click to view all columns in the dataset", expanded=True)
+            with col_display:
+                # Create a more visually appealing display of columns
+                col_data = {"Column Name": columns, "Sample Values": [str(df[col].iloc[0]) if col in df.columns else "N/A" for col in columns]}
+                st.dataframe(pd.DataFrame(col_data), use_container_width=True)
+                
+                # Add a copy button for convenience
+                st.code(", ".join(columns), language="text")
+                st.caption("Use the column names above for configuring your forecast parameters")
         except Exception as e:
             st.sidebar.error(f"Error loading data: {str(e)}")
     
