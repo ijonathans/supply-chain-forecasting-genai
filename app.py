@@ -177,14 +177,27 @@ def run_forecast(df, target_column, periods, frequency, data_color, forecast_col
 # Generate insights
 def get_insights(forecast, target_column, context):
     try:
+        # Extract key forecast data for better insights
+        recent_forecast = forecast[['ds', 'yhat']].tail(10)
+        forecast_trend = "increasing" if recent_forecast['yhat'].iloc[-1] > recent_forecast['yhat'].iloc[0] else "decreasing"
+        percent_change = ((recent_forecast['yhat'].iloc[-1] - recent_forecast['yhat'].iloc[0]) / recent_forecast['yhat'].iloc[0] * 100) if recent_forecast['yhat'].iloc[0] != 0 else 0
+        
+        # Generate insights using LLM
         insights = forecast_chain.invoke({
-            "task": "Provide a detailed business insights",
-            "data": f"forecast for {target_column}: {forecast[['ds', 'yhat']].tail().to_string()}",
+            "task": "Provide detailed business insights",
+            "data": f"forecast for {target_column}: {recent_forecast.to_string()}, with a {forecast_trend} trend of {percent_change:.2f}% over the forecast period",
             "context": context
         }).content
+        
+        # If insights generation fails or returns empty, provide a fallback
+        if not insights or len(insights.strip()) < 10:
+            return f"Based on the forecast, {target_column} shows a {forecast_trend} trend with approximately {abs(percent_change):.2f}% change over the forecast period. This suggests that business planning should account for this {forecast_trend} pattern in the coming periods."
+        
         return insights
     except Exception as e:
-        return f"Error generating insights: {e}"
+        st.error(f"Error generating insights: {e}")
+        # Provide a fallback insight even when there's an error
+        return f"Unable to generate detailed insights due to an error. However, the forecast data suggests monitoring {target_column} closely for upcoming periods as trends may impact business operations."
 
 # Multi-group forecast with descriptive headers and filtering
 def run_multi_group_forecast(df, group_columns, target_column, periods, frequency, context, data_color, forecast_color, top_n=10, filter_group=None, selected_group=None):

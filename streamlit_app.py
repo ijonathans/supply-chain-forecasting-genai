@@ -43,6 +43,12 @@ if not os.getenv("OPENAI_API_KEY"):
     else:
         st.stop()
 
+# Add API key input in the sidebar
+api_key = st.sidebar.text_input("OpenAI API Key (required for insights)", type="password", help="Enter your OpenAI API key to enable business insights")
+if api_key:
+    os.environ["OPENAI_API_KEY"] = api_key
+    st.sidebar.success("API key set for this session!")
+
 try:
     # Import app.py module and all its functions
     import app
@@ -237,9 +243,18 @@ try:
             
             # Add business insights section
             st.subheader("Business Insights")
-            with st.spinner("Generating business insights..."):
-                insights = get_insights(forecast, target_column, context)
-                st.info(insights)
+            
+            if not os.getenv("OPENAI_API_KEY"):
+                st.warning("⚠️ Please enter your OpenAI API key in the sidebar to enable AI-powered business insights")
+            else:
+                with st.spinner("Generating business insights..."):
+                    insights = get_insights(forecast, target_column, context)
+                    st.markdown("""
+                    <div style="background-color:#f0f7fb; padding:15px; border-radius:10px; border-left:5px solid #2196F3;">
+                        <h4 style="color:#1976D2;">AI-Generated Business Recommendations</h4>
+                        <p>{}</p>
+                    </div>
+                    """.format(insights), unsafe_allow_html=True)
             
             if forecast is not None:
                 st.subheader("Forecast Details")
@@ -296,11 +311,19 @@ try:
                         
                         # Add business insights for the selected group
                         st.subheader(f"Business Insights for {selected_group}")
-                        with st.spinner("Generating business insights..."):
-                            group_insights = get_insights(forecast, target_column, f"{context} for {selected_group}")
-                            st.info(group_insights)
                         
-                        # Extract group values for filtering
+                        if not os.getenv("OPENAI_API_KEY"):
+                            st.warning("⚠️ Please enter your OpenAI API key in the sidebar to enable AI-powered business insights")
+                        else:
+                            with st.spinner("Generating business insights..."):
+                                group_insights = get_insights(forecast, target_column, f"{context} for {selected_group}")
+                                st.markdown("""
+                                <div style="background-color:#f0f7fb; padding:15px; border-radius:10px; border-left:5px solid #2196F3;">
+                                    <h4 style="color:#1976D2;">AI-Generated Business Recommendations</h4>
+                                    <p>{}</p>
+                                </div>
+                                """.format(group_insights), unsafe_allow_html=True)
+                        
                         group_data = combined_agg_df
                         parts = selected_group.split(' & ')
                         for i, part in enumerate(parts):
@@ -358,9 +381,18 @@ try:
                         
                         # Add business insights for the selected group
                         st.subheader(f"Business Insights for {selected_group}")
-                        with st.spinner("Generating business insights..."):
-                            group_insights = get_insights(forecast, target_column, f"{context} for {selected_group}")
-                            st.info(group_insights)
+                        
+                        if not os.getenv("OPENAI_API_KEY"):
+                            st.warning("⚠️ Please enter your OpenAI API key in the sidebar to enable AI-powered business insights")
+                        else:
+                            with st.spinner("Generating business insights..."):
+                                group_insights = get_insights(forecast, target_column, f"{context} for {selected_group}")
+                                st.markdown("""
+                                <div style="background-color:#f0f7fb; padding:15px; border-radius:10px; border-left:5px solid #2196F3;">
+                                    <h4 style="color:#1976D2;">AI-Generated Business Recommendations</h4>
+                                    <p>{}</p>
+                                </div>
+                                """.format(group_insights), unsafe_allow_html=True)
                         
                         group_data = primary_agg_df[primary_agg_df[selected_group_columns[0]] == selected_group]
                         st.write(f"Detailed view for {selected_group} has {len(group_data)} rows")
@@ -413,9 +445,18 @@ try:
                         
                         # Add business insights for the selected group
                         st.subheader(f"Business Insights for {selected_group}")
-                        with st.spinner("Generating business insights..."):
-                            group_insights = get_insights(forecast, target_column, f"{context} for {selected_group}")
-                            st.info(group_insights)
+                        
+                        if not os.getenv("OPENAI_API_KEY"):
+                            st.warning("⚠️ Please enter your OpenAI API key in the sidebar to enable AI-powered business insights")
+                        else:
+                            with st.spinner("Generating business insights..."):
+                                group_insights = get_insights(forecast, target_column, f"{context} for {selected_group}")
+                                st.markdown("""
+                                <div style="background-color:#f0f7fb; padding:15px; border-radius:10px; border-left:5px solid #2196F3;">
+                                    <h4 style="color:#1976D2;">AI-Generated Business Recommendations</h4>
+                                    <p>{}</p>
+                                </div>
+                                """.format(group_insights), unsafe_allow_html=True)
                         
                         group_data = secondary_agg_df[secondary_agg_df[selected_group_columns[1]] == selected_group]
                         st.write(f"Detailed view for {selected_group} has {len(group_data)} rows")
