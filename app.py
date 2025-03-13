@@ -153,7 +153,14 @@ def run_forecast(df, target_column, periods, frequency, data_color, forecast_col
         future = model.make_future_dataframe(periods=periods, freq=frequency)
         forecast = model.predict(future)
         
-        fig1, ax1 = plt.subplots(figsize=(10, 6))
+        # Calculate appropriate figure width based on number of data points
+        num_data_points = len(df_prophet) + periods
+        base_width = 10
+        # Adjust width based on data points, with a reasonable maximum
+        width_factor = min(max(1, num_data_points / 100), 3)  # Limit to 3x base width
+        fig_width = base_width * width_factor
+        
+        fig1, ax1 = plt.subplots(figsize=(fig_width, 6))
         last_historical_date = df_prophet['ds'].max()
         historical_data = df_prophet[df_prophet['ds'] <= last_historical_date]
         forecast_data = forecast[forecast['ds'] > last_historical_date]
@@ -166,6 +173,7 @@ def run_forecast(df, target_column, periods, frequency, data_color, forecast_col
         ax1.set_xlabel('Date')
         ax1.set_ylabel(target_column)
         ax1.grid(True, linestyle='--', alpha=0.7)
+        plt.gcf().autofmt_xdate()
         plt.tight_layout()
         
         fig2 = model.plot_components(forecast, figsize=(10, 8))
@@ -212,16 +220,22 @@ def run_multi_group_forecast(df, group_columns, target_column, periods, frequenc
     
     agg_df = aggregate_data(df, target_column, frequency, group_columns if not filter_group else [filter_group])
     
+    # Calculate appropriate figure width based on data points
+    max_data_points = len(agg_df) + periods
+    base_width = 10
+    width_factor = min(max(1, max_data_points / 100), 3)  # Limit to 3x base width
+    fig_width = base_width * width_factor
+    
+    fig_compare, ax_compare = plt.subplots(figsize=(fig_width, 6))
+    forecasts_dict = {}
+    agg_df_dict = {}  # Store aggregated data per group
+    
     if len(group_columns if not filter_group else [filter_group]) == 1:
         group_values = agg_df[group_columns[0] if not filter_group else filter_group].value_counts().nlargest(top_n).index.tolist()
         combined_groups = [(val,) for val in group_values]
     else:
         group_sums = agg_df.groupby(group_columns)[target_column].sum().nlargest(top_n)
         combined_groups = list(group_sums.index)
-    
-    fig_compare, ax_compare = plt.subplots(figsize=(12, 6))
-    forecasts_dict = {}
-    agg_df_dict = {}  # Store aggregated data per group
     
     for i, group_combo in enumerate(combined_groups):
         group_color = plt.cm.tab10(i % 10)  # Unique color per group
@@ -266,6 +280,7 @@ def run_multi_group_forecast(df, group_columns, target_column, periods, frequenc
     ax_compare.set_ylabel(target_column)
     ax_compare.grid(True, linestyle='--', alpha=0.7)
     ax_compare.legend(loc='upper left', bbox_to_anchor=(1.02, 1), borderaxespad=0)
+    plt.gcf().autofmt_xdate()  # Better date formatting on x-axis
     plt.tight_layout()
     
     if forecasts_dict:
