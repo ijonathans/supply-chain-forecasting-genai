@@ -8,3 +8,4 @@ python-dotenv>=0.21.0
 openai>=1.10.0
 langchain-openai>=0.0.5
 langchain>=0.0.335
+plotly>=5.13.0
