@@ -26,7 +26,7 @@ if not os.getenv("OPENAI_API_KEY"):
 3. Your key will only be stored for this session
 4. For production, set OPENAI_API_KEY in your environment variables
     """)
-    api_key = st.text_input("Enter your OpenAI API key", type="password")
+    api_key = st.text_input("Enter your OpenAI API key", type="password", key="api_key_input")
     if api_key:
         os.environ["OPENAI_API_KEY"] = api_key
         st.success("API key set successfully! The app will now load.")
@@ -56,33 +56,34 @@ try:
     st.sidebar.markdown("Configure your forecast parameters below:")
     
     # File upload
-    uploaded_file = st.sidebar.file_uploader("Upload your time series data (CSV)", type=["csv"])
+    uploaded_file = st.sidebar.file_uploader("Upload your time series data (CSV)", type=["csv"], key="csv_uploader")
     
     # Date column selection
-    date_column = st.sidebar.text_input("Date column name", "Date")
+    date_column = st.sidebar.text_input("Date column name", "Date", key="date_column_input")
     
     # Context input
     context = st.sidebar.text_area("Dataset context (for better feature engineering)", 
-                                  "This is a supply chain dataset with sales data across different stores and departments.")
+                                  "This is a supply chain dataset with sales data across different stores and departments.",
+                                  key="context_input")
     
     # Target column
-    target_column = st.sidebar.text_input("Target column to forecast", "Weekly_Sales")
+    target_column = st.sidebar.text_input("Target column to forecast", "Weekly_Sales", key="target_column_input")
     
     # Group columns
-    group_column_input = st.sidebar.text_input("Group columns (comma-separated)", "Store,Dept")
+    group_column_input = st.sidebar.text_input("Group columns (comma-separated)", "Store,Dept", key="group_columns_input")
     selected_group_columns = [col.strip() for col in group_column_input.split(",")] if group_column_input else []
     
     # Forecast parameters
-    periods = st.sidebar.slider("Forecast periods", 1, 52, 12)
+    periods = st.sidebar.slider("Forecast periods", 1, 52, 12, key="periods_slider")
     frequency_options = ["D", "W", "ME"]
-    frequency = st.sidebar.selectbox("Frequency", frequency_options, index=1)
+    frequency = st.sidebar.selectbox("Frequency", frequency_options, index=1, key="frequency_select")
     
     # Colors
-    data_color = st.sidebar.color_picker("Historical data color", "#1f77b4")
-    forecast_color = st.sidebar.color_picker("Forecast color", "#ff7f0e")
+    data_color = st.sidebar.color_picker("Historical data color", "#1f77b4", key="data_color_picker")
+    forecast_color = st.sidebar.color_picker("Forecast color", "#ff7f0e", key="forecast_color_picker")
     
     # Run button
-    run_button = st.sidebar.button("Generate Forecast")
+    run_button = st.sidebar.button("Generate Forecast", key="generate_forecast_button")
     
     # Load data
     df = None
@@ -195,7 +196,7 @@ try:
             if 'secondary' in results and len(selected_group_columns) >= 2:
                 filter_options.append(selected_group_columns[1])
         
-        selected_filter = st.selectbox("View forecast by", filter_options)
+        selected_filter = st.selectbox("View forecast by", filter_options, key="view_forecast_select")
         
         # Display based on filter selection
         if selected_filter == "Overall (No Grouping)" and 'single' in results:
@@ -217,6 +218,7 @@ try:
                     data=convert_df_to_csv(forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']]),
                     file_name=f"forecast_{target_column}.csv",
                     mime="text/csv",
+                    key="download_overall_forecast"
                 )
         
         elif selected_group_columns:
@@ -251,6 +253,7 @@ try:
                         data=convert_df_to_csv(all_forecasts),
                         file_name=f"{group_title}_forecasts_{target_column}.csv",
                         mime="text/csv",
+                        key="download_combined_forecasts"
                     )
                     
                     if selected_group != "All":
@@ -307,6 +310,7 @@ try:
                         data=convert_df_to_csv(all_forecasts),
                         file_name=f"{selected_group_columns[0]}_forecasts_{target_column}.csv",
                         mime="text/csv",
+                        key="download_primary_forecasts"
                     )
                     
                     if selected_group != "All":
@@ -356,6 +360,7 @@ try:
                         data=convert_df_to_csv(all_forecasts),
                         file_name=f"{selected_group_columns[1]}_forecasts_{target_column}.csv",
                         mime="text/csv",
+                        key="download_secondary_forecasts"
                     )
                     
                     if selected_group != "All":
@@ -376,7 +381,7 @@ try:
     
     # Reset button
     if st.session_state.forecast_results:
-        if st.sidebar.button("Reset Application"):
+        if st.sidebar.button("Reset Application", key="reset_app_button"):
             st.session_state.forecast_results = {}
             st.experimental_rerun()
             
