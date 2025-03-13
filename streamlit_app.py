@@ -323,7 +323,7 @@ try:
                     
                     # Move the selection box below the heatmap
                     selected_group = st.selectbox(
-                        f"Select {group_title} to view",
+                        f"Select {group_title} to view the insights",
                         options=["All"] + group_labels,
                         key="combined_group_select"
                     )
