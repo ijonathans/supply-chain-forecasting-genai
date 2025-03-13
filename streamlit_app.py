@@ -100,19 +100,27 @@ try:
     columns = []
     if uploaded_file:
         try:
+            # Store original dataframe before any modifications
+            original_df = pd.read_csv(uploaded_file)
+            original_columns = original_df.columns.tolist()
+            
+            # Reset the file pointer to the beginning for the actual processing
+            uploaded_file.seek(0)
+            
+            # Process the data for forecasting
             df, columns = load_data(uploaded_file, date_column)
             st.sidebar.success(f"Data loaded successfully: {len(df)} rows, {len(columns)} columns")
             
-            # Display column names in the main area
+            # Display column names in the main area (using original column names)
             st.subheader("Dataset Columns")
             col_display = st.expander("Click to view all columns in the dataset", expanded=True)
             with col_display:
-                # Create a more visually appealing display of columns
-                col_data = {"Column Name": columns, "Sample Values": [str(df[col].iloc[0]) if col in df.columns else "N/A" for col in columns]}
+                # Create a more visually appealing display of columns with original names
+                col_data = {"Column Name": original_columns, "Sample Values": [str(original_df[col].iloc[0]) for col in original_columns]}
                 st.dataframe(pd.DataFrame(col_data), use_container_width=True)
                 
                 # Add a copy button for convenience
-                st.code(", ".join(columns), language="text")
+                st.code(", ".join(original_columns), language="text")
                 st.caption("Use the column names above for configuring your forecast parameters")
         except Exception as e:
             st.sidebar.error(f"Error loading data: {str(e)}")
@@ -223,16 +231,19 @@ try:
         # Display based on filter selection
         if selected_filter == "Overall (No Grouping)" and 'single' in results:
             fig1, forecast = results['single']
-            st.subheader("Overall Forecast")
+            st.subheader("Overall Forecast Results")
             if fig1:
                 st.pyplot(fig1)
-            else:
-                st.warning("No forecast plot generated.")
+            
+            # Add business insights section
+            st.subheader("Business Insights")
+            with st.spinner("Generating business insights..."):
+                insights = get_insights(forecast, target_column, context)
+                st.info(insights)
             
             if forecast is not None:
                 st.subheader("Forecast Details")
                 st.write(forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail())
-                st.write("Insights:", get_insights(forecast, target_column, context))
                 
                 # Download button
                 st.download_button(
@@ -282,7 +293,12 @@ try:
                         st.subheader(f"Detailed Forecast for {selected_group}")
                         forecast = combined_forecasts[selected_group]
                         st.write(forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail())
-                        st.write("Insights:", get_insights(forecast, target_column, context))
+                        
+                        # Add business insights for the selected group
+                        st.subheader(f"Business Insights for {selected_group}")
+                        with st.spinner("Generating business insights..."):
+                            group_insights = get_insights(forecast, target_column, f"{context} for {selected_group}")
+                            st.info(group_insights)
                         
                         # Extract group values for filtering
                         group_data = combined_agg_df
@@ -339,7 +355,12 @@ try:
                         st.subheader(f"Detailed Forecast for {selected_group}")
                         forecast = primary_forecasts[selected_group]
                         st.write(forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail())
-                        st.write("Insights:", get_insights(forecast, target_column, context))
+                        
+                        # Add business insights for the selected group
+                        st.subheader(f"Business Insights for {selected_group}")
+                        with st.spinner("Generating business insights..."):
+                            group_insights = get_insights(forecast, target_column, f"{context} for {selected_group}")
+                            st.info(group_insights)
                         
                         group_data = primary_agg_df[primary_agg_df[selected_group_columns[0]] == selected_group]
                         st.write(f"Detailed view for {selected_group} has {len(group_data)} rows")
@@ -389,7 +410,12 @@ try:
                         st.subheader(f"Detailed Forecast for {selected_group}")
                         forecast = secondary_forecasts[selected_group]
                         st.write(forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail())
-                        st.write("Insights:", get_insights(forecast, target_column, context))
+                        
+                        # Add business insights for the selected group
+                        st.subheader(f"Business Insights for {selected_group}")
+                        with st.spinner("Generating business insights..."):
+                            group_insights = get_insights(forecast, target_column, f"{context} for {selected_group}")
+                            st.info(group_insights)
                         
                         group_data = secondary_agg_df[secondary_agg_df[selected_group_columns[1]] == selected_group]
                         st.write(f"Detailed view for {selected_group} has {len(group_data)} rows")

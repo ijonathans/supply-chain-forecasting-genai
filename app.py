@@ -161,7 +161,7 @@ def run_forecast(df, target_column, periods, frequency, data_color, forecast_col
         ax1.plot(historical_data['ds'], historical_data['y'], '-', color=data_color, label='Historical Data')
         ax1.plot(forecast_data['ds'], forecast_data['yhat'], '-', color=forecast_color, label='Forecast')
         ax1.fill_between(forecast_data['ds'], forecast_data['yhat_lower'], forecast_data['yhat_upper'], color=forecast_color, alpha=0.2)
-        ax1.legend()
+        ax1.legend(loc='upper left', bbox_to_anchor=(1.02, 1), borderaxespad=0)
         ax1.set_title(f'{target_column} Forecast')
         ax1.set_xlabel('Date')
         ax1.set_ylabel(target_column)
@@ -251,8 +251,8 @@ def run_multi_group_forecast(df, group_columns, target_column, periods, frequenc
     ax_compare.set_title(f"{target_column} Forecast Comparison")
     ax_compare.set_xlabel("Date")
     ax_compare.set_ylabel(target_column)
-    ax_compare.grid(True, linestyle='--', alpha=0.5)
-    ax_compare.legend()
+    ax_compare.grid(True, linestyle='--', alpha=0.7)
+    ax_compare.legend(loc='upper left', bbox_to_anchor=(1.02, 1), borderaxespad=0)
     plt.tight_layout()
     
     if forecasts_dict:
