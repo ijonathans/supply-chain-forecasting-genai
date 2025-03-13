@@ -14,17 +14,18 @@ st.set_page_config(
 
 # Add a title to the app
 st.title("Supply Chain Forecasting with GenAI")
-st.markdown("---")
 
 # Add app description and author information
 st.markdown("""
 <div style="text-align: left; color: #4d4d4d; padding: 10px; margin-bottom: 20px;">
     <p>Created by Ignatius Jonathan Sugijono</p>
-    <p>Version 0.1 - beta</p>
+    <p>Version 1.1</p>
     <p>Built using Streamlit, Pandas, and Plotly for interactive visualizations.</p>
     <p>For feedback, contact: ignatiusjonathan07@gmail.com</p>
 </div>
 """, unsafe_allow_html=True)
+
+st.markdown("---")
 
 # Check for API key
 if not os.getenv("OPENAI_API_KEY"):
@@ -63,6 +64,13 @@ try:
         convert_df_to_csv
     )
     
+    # Initialize session state
+    if 'forecast_results' not in st.session_state:
+        st.session_state.forecast_results = None
+
+    if 'date_column' not in st.session_state:
+        st.session_state.date_column = ""
+
     # Main content area
     if 'forecast_results' not in st.session_state:
         st.session_state.forecast_results = {}
@@ -75,7 +83,13 @@ try:
     uploaded_file = st.sidebar.file_uploader("Upload your time series data (CSV)", type=["csv"], key="csv_uploader")
     
     # Date column selection
-    date_column = st.sidebar.text_input("Date column name", "Date", key="date_column_input")
+    date_column = st.sidebar.text_input(
+        "Date column name", 
+        value=st.session_state.date_column if st.session_state.date_column else "Date", 
+        key="date_column_input"
+    )
+    # Update session state with the current value
+    st.session_state.date_column = date_column
     
     # Context input
     context = st.sidebar.text_area("Dataset context (for better feature engineering)", 
@@ -105,31 +119,47 @@ try:
     df = None
     columns = []
     if uploaded_file:
-        try:
-            # Store original dataframe before any modifications
-            original_df = pd.read_csv(uploaded_file)
-            original_columns = original_df.columns.tolist()
+        # Always read and display the original columns first
+        original_df = pd.read_csv(uploaded_file)
+        original_columns = original_df.columns.tolist()
+        
+        # Display column names in the main area (using original column names)
+        st.subheader("Dataset Columns")
+        col_display = st.expander("Click to view all columns in the dataset", expanded=True)
+        with col_display:
+            # Create a more visually appealing display of columns with original names
+            col_data = {"Column Name": original_columns, "Sample Values": [str(original_df[col].iloc[0]) for col in original_columns]}
+            st.dataframe(pd.DataFrame(col_data), use_container_width=True)
             
+            # Add a copy button for convenience
+            st.code(", ".join(original_columns), language="text")
+            st.caption("Use the column names above for configuring your forecast parameters")
+        
+        # Now try to process the data with the selected date column
+        try:
             # Reset the file pointer to the beginning for the actual processing
             uploaded_file.seek(0)
             
             # Process the data for forecasting
             df, columns = load_data(uploaded_file, date_column)
             st.sidebar.success(f"Data loaded successfully: {len(df)} rows, {len(columns)} columns")
-            
-            # Display column names in the main area (using original column names)
-            st.subheader("Dataset Columns")
-            col_display = st.expander("Click to view all columns in the dataset", expanded=True)
-            with col_display:
-                # Create a more visually appealing display of columns with original names
-                col_data = {"Column Name": original_columns, "Sample Values": [str(original_df[col].iloc[0]) for col in original_columns]}
-                st.dataframe(pd.DataFrame(col_data), use_container_width=True)
-                
-                # Add a copy button for convenience
-                st.code(", ".join(original_columns), language="text")
-                st.caption("Use the column names above for configuring your forecast parameters")
         except Exception as e:
-            st.sidebar.error(f"Error loading data: {str(e)}")
+            error_msg = str(e)
+            if "not found" in error_msg and date_column:
+                st.error(f"Error: Date column '{date_column}' not found. Please select a valid date column from the list above and update the 'Date Column' field in the sidebar.")
+                
+                # Add a more prominent date column selector
+                st.warning("Please select the correct date column from the dropdown below:")
+                new_date_column = st.selectbox("Select Date Column", options=original_columns, key="date_column_correction")
+                if st.button("Update Date Column"):
+                    st.session_state.date_column = new_date_column
+                    st.experimental_rerun()
+            else:
+                st.error(f"Error loading data: {error_msg}")
+                st.info("Please check your data format and try again. Make sure to select the correct date column from the list above.")
+            
+            # Set df to None to prevent forecast generation
+            df = None
     
     # Main content area
     if df is None and not st.session_state.forecast_results:
@@ -309,7 +339,7 @@ try:
                         forecast = combined_forecasts[selected_group]
                         st.write(forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail())
                         
-                        # Add business insights for the selected group
+                        # Add business insights section
                         st.subheader(f"Business Insights for {selected_group}")
                         
                         if not os.getenv("OPENAI_API_KEY"):
@@ -379,7 +409,7 @@ try:
                         forecast = primary_forecasts[selected_group]
                         st.write(forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail())
                         
-                        # Add business insights for the selected group
+                        # Add business insights section
                         st.subheader(f"Business Insights for {selected_group}")
                         
                         if not os.getenv("OPENAI_API_KEY"):
@@ -443,7 +473,7 @@ try:
                         forecast = secondary_forecasts[selected_group]
                         st.write(forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail())
                         
-                        # Add business insights for the selected group
+                        # Add business insights section
                         st.subheader(f"Business Insights for {selected_group}")
                         
                         if not os.getenv("OPENAI_API_KEY"):
