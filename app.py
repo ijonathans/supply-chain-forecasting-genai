@@ -14,23 +14,33 @@ import traceback
 from dotenv import load_dotenv
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Load environment variables
 try:
     load_dotenv()
+    logger.info("Environment variables loaded successfully.")
 except Exception as e:
     st.error(f"Error loading environment variables: {str(e)}")
+    logger.error(f"Error loading environment variables: {str(e)}")
 
 # Initialize OpenAI client and LangChain LLM
 try:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         st.warning("API key not found in environment variables.")
+        logger.warning("API key not found in environment variables.")
     
     client = OpenAI(api_key=api_key)
     llm = ChatOpenAI(api_key=api_key, model="gpt-4o-mini", temperature=0.2)
+    logger.info("OpenAI client and LangChain LLM initialized successfully.")
 except Exception as e:
     st.error(f"Error initializing OpenAI client or LangChain LLM: {str(e)}")
+    logger.error(f"Error initializing OpenAI client or LangChain LLM: {str(e)}")
     st.code(traceback.format_exc())
 
 # Define prompt templates
@@ -44,20 +54,25 @@ try:
         input_variables=["task", "data", "context"],
         template="Given this task: {task}, data: {data}, and context: {context}, generate the appropriate code or insight as plain text without markdown, backticks, or additional formatting. For Prophet code, use 'from prophet import Prophet', define 'model' as the Prophet instance, and 'forecast' as the prediction output, ensuring the DataFrame 'df' has 'ds' for dates and 'y' for the target column specified. For insights, provide a detailed analysis of trends, peaks, or dips in the forecast, with actionable business recommendations in a concise paragraph (3-5 sentences), avoiding code or technical jargon, and leveraging the context to tailor the insights."
     )
+    logger.info("Prompt templates defined successfully.")
 except Exception as e:
     st.error(f"Error defining prompt templates: {str(e)}")
+    logger.error(f"Error defining prompt templates: {str(e)}")
     st.code(traceback.format_exc())
 
 # Create RunnableSequences
 try:
     feature_chain = RunnableSequence(feature_prompt | llm)
     forecast_chain = RunnableSequence(forecast_prompt | llm)
+    logger.info("RunnableSequences created successfully.")
 except Exception as e:
     st.error(f"Error creating RunnableSequences: {str(e)}")
+    logger.error(f"Error creating RunnableSequences: {str(e)}")
     st.code(traceback.format_exc())
 
 # Load the dataset and return columns
 def load_data(file=None, date_column='ds', filename='time_series_data.csv'):
+    logger.info(f"Loading data with date_column: {date_column}...")
     try:
         if file:
             df = pd.read_csv(file)
@@ -72,13 +87,17 @@ def load_data(file=None, date_column='ds', filename='time_series_data.csv'):
         if df['ds'].isna().any():
             raise ValueError("Some dates could not be parsed.")
         
+        logger.info("Data loaded successfully.")
         return df, df.columns.tolist()
     except Exception as e:
         st.error(f"Error loading data: {e}")
+        logger.error(f"Error loading data: {str(e)}")
+        logger.error(traceback.format_exc())
         return None, []
 
 # Infer dataset granularity
 def infer_granularity(df):
+    logger.info("Inferring dataset granularity...")
     try:
         df_sorted = df[['ds']].sort_values('ds').drop_duplicates()
         time_diffs = df_sorted['ds'].diff().dropna()
@@ -92,10 +111,12 @@ def infer_granularity(df):
             return ['ME']
     except Exception as e:
         st.warning(f"Could not infer granularity: {e}. Defaulting to Weekly.")
+        logger.warning(f"Could not infer granularity: {e}. Defaulting to Weekly.")
         return ['W']
 
 # Aggregate data
 def aggregate_data(df, target_column, frequency='W', group_columns=None):
+    logger.info(f"Aggregating data with target_column: {target_column}, frequency: {frequency}, group_columns: {group_columns}...")
     try:
         df_copy = df.copy()
         if frequency == 'D':
@@ -134,48 +155,65 @@ def aggregate_data(df, target_column, frequency='W', group_columns=None):
             agg_df = full_df.merge(agg_df, on='ds', how='left')
             agg_df[target_column] = agg_df[target_column].fillna(0)
         
+        logger.info("Data aggregated successfully.")
         return agg_df
     except Exception as e:
         st.error(f"Error aggregating data: {e}")
+        logger.error(f"Error aggregating data: {str(e)}")
+        logger.error(traceback.format_exc())
         return df
 
 # Feature engineering
 def engineer_features(df, target_column, background, columns):
+    logger.info(f"Running feature engineering for target_column: {target_column}...")
     try:
         if target_column in df.columns:
             st.info(f"Target column '{target_column}' already exists.")
+            logger.info(f"Target column '{target_column}' already exists. Skipping feature engineering.")
             return df
         
+        logger.info("Invoking feature_chain...")
         feature_code = feature_chain.invoke({
             "background": background,
             "columns": ", ".join(columns),
             "target_column": target_column
         }).content
+        logger.info(f"Feature code generated: {feature_code}")
         local_vars = {'df': df.copy()}
         exec(feature_code, globals(), local_vars)
         df = local_vars['df']
         st.success(f"Created '{target_column}'.")
+        logger.info(f"Created target column '{target_column}'.")
         return df
     except Exception as e:
         st.error(f"Error in feature engineering: {e}")
+        logger.error(f"Error in feature engineering: {str(e)}")
+        logger.error(traceback.format_exc())
         return df
 
 # Forecast for a single group
 def run_forecast(df, target_column, periods, frequency, data_color, forecast_color):
+    logger.info(f"Running forecast for target_column: {target_column}, periods: {periods}, frequency: {frequency}...")
     if target_column not in df.columns:
         st.error(f"Target column '{target_column}' not found.")
+        logger.error(f"Target column '{target_column}' not found.")
         return None, None, None, None, None
     
     df_prophet = df[['ds', target_column]].rename(columns={target_column: 'y'})
     if len(df_prophet.dropna()) < 2:
         st.warning(f"Not enough data for forecasting (less than 2 non-NaN rows).")
+        logger.warning("Not enough data for forecasting (less than 2 non-NaN rows).")
         return None, None, None, None, None
     
     try:
+        logger.info("Fitting Prophet model...")
         model = Prophet()
         model.fit(df_prophet)
+        logger.info("Prophet model fitted successfully.")
         future = model.make_future_dataframe(periods=periods, freq=frequency, include_history=True)
+        logger.info("Making forecast...")
         forecast = model.predict(future)
+        logger.info("Forecast generated successfully.")
         
         # Calculate appropriate figure width based on number of data points
         num_data_points = len(df_prophet) + periods
@@ -184,6 +222,7 @@ def run_forecast(df, target_column, periods, frequency, data_color, forecast_col
         fig_width = base_width * width_factor
         
         # Create matplotlib figure for standard display
+        logger.info("Creating matplotlib figure...")
         fig1, ax1 = plt.subplots(figsize=(fig_width, 6), dpi=300)
         last_historical_date = df_prophet['ds'].max()
         historical_data = df_prophet[df_prophet['ds'] <= last_historical_date]
@@ -199,8 +238,10 @@ def run_forecast(df, target_column, periods, frequency, data_color, forecast_col
         ax1.grid(True, linestyle='--', alpha=0.7)
         plt.gcf().autofmt_xdate()
         plt.tight_layout()
+        logger.info("Matplotlib figure created successfully.")
         
         # Create Plotly figure for interactive zooming
+        logger.info("Creating Plotly figure...")
         plotly_fig = make_subplots(specs=[[{"secondary_y": False}]])
         
         # Add historical data trace
@@ -266,15 +307,22 @@ def run_forecast(df, target_column, periods, frequency, data_color, forecast_col
                 ])
             )
         )
+        logger.info("Plotly figure created successfully.")
         
+        logger.info("Generating forecast components plot...")
         fig2 = model.plot_components(forecast, figsize=(10, 8), dpi=300)
+        logger.info("Forecast components plot generated.")
+        
         return model, forecast, fig1, fig2, plotly_fig
     except Exception as e:
         st.error(f"Error in Prophet model: {e}")
+        logger.error(f"Error in Prophet model: {str(e)}")
+        logger.error(traceback.format_exc())
         return None, None, None, None, None
 
 # Generate insights
 def get_insights(forecast, target_column, context):
+    logger.info(f"Generating insights for target_column: {target_column}...")
     try:
         # Extract key forecast data for better insights
         recent_forecast = forecast[['ds', 'yhat']].tail(10)
@@ -282,23 +330,29 @@ def get_insights(forecast, target_column, context):
         percent_change = ((recent_forecast['yhat'].iloc[-1] - recent_forecast['yhat'].iloc[0]) / recent_forecast['yhat'].iloc[0] * 100) if recent_forecast['yhat'].iloc[0] != 0 else 0
         
         # Generate insights using LLM
+        logger.info("Invoking forecast_chain for insights...")
         insights = forecast_chain.invoke({
             "task": "Provide detailed business insights",
             "data": f"forecast for {target_column}: {recent_forecast.to_string()}, with a {forecast_trend} trend of {percent_change:.2f}% over the forecast period",
             "context": context
         }).content
+        logger.info("Insights generated successfully.")
         
         # If insights generation fails or returns empty, provide a fallback
         if not insights or len(insights.strip()) < 10:
+            logger.warning("Insights generation failed or returned empty. Using fallback.")
             return f"Based on the forecast, {target_column} shows a {forecast_trend} trend with approximately {abs(percent_change):.2f}% change over the forecast period. This suggests that business planning should account for this {forecast_trend} pattern in the coming periods."
         
         return insights
     except Exception as e:
         st.error(f"Error generating insights: {e}")
+        logger.error(f"Error generating insights: {str(e)}")
+        logger.error(traceback.format_exc())
         return f"Unable to generate detailed insights due to an error. However, the forecast data suggests monitoring {target_column} closely for upcoming periods as trends may impact business operations."
 
 # Multi-group forecast with descriptive headers and filtering
 def run_multi_group_forecast(df, group_columns, target_column, periods, frequency, context, data_color, forecast_color, top_n=10, filter_group=None, selected_group=None):
+    logger.info(f"Running multi-group forecast for group_columns: {group_columns}, target_column: {target_column}...")
     group_title = filter_group if filter_group else " & ".join(group_columns)
     
     # Generate a descriptive header based on group and context
@@ -308,7 +362,9 @@ def run_multi_group_forecast(df, group_columns, target_column, periods, frequenc
         description = f"Forecasting {target_column} across top {top_n} combinations of {' and '.join(group_columns)} from {context.lower()}"
     st.subheader(description)
     
+    logger.info("Aggregating data for multi-group forecast...")
     agg_df = aggregate_data(df, target_column, frequency, group_columns if not filter_group else [filter_group])
+    logger.info("Data aggregated successfully.")
     
     # Calculate appropriate figure width based on data points
     max_data_points = len(agg_df) + periods
@@ -316,12 +372,13 @@ def run_multi_group_forecast(df, group_columns, target_column, periods, frequenc
     width_factor = min(max(1, max_data_points / 100), 3)  # Limit to 3x base width
     fig_width = base_width * width_factor
     
+    logger.info("Creating comparison figure...")
     fig_compare, ax_compare = plt.subplots(figsize=(fig_width, 6), dpi=300)
     forecasts_dict = {}
     agg_df_dict = {}  # Store aggregated data per group
     
     if len(group_columns if not filter_group else [filter_group]) == 1:
-        group_values = agg_df[group_columns[0] if not filter_group else [filter_group]].value_counts().nlargest(top_n).index.tolist()
+        group_values = agg_df[group_columns[0] if not filter_group else filter_group].value_counts().nlargest(top_n).index.tolist()
         combined_groups = [(val,) for val in group_values]
     else:
         group_sums = agg_df.groupby(group_columns)[target_column].sum().nlargest(top_n)
@@ -339,13 +396,18 @@ def run_multi_group_forecast(df, group_columns, target_column, periods, frequenc
                 group_data = group_data[group_data[col] == val]
             group_label = " & ".join([f"{col}={val}" for col, val in zip(group_columns, group_combo)])
         
+        logger.info(f"Processing group: {group_label}...")
         if not group_data.empty and len(group_data.dropna()) >= 2:
             try:
                 prophet_data = group_data[['ds', target_column]].rename(columns={target_column: 'y'})
+                logger.info(f"Fitting Prophet model for group: {group_label}...")
                 model = Prophet()
                 model.fit(prophet_data)
+                logger.info(f"Prophet model fitted for group: {group_label}.")
                 future = model.make_future_dataframe(periods=periods, freq=frequency, include_history=True)  # Include history
+                logger.info(f"Generating forecast for group: {group_label}...")
                 forecast = model.predict(future)
+                logger.info(f"Forecast generated for group: {group_label}.")
                 
                 last_date = prophet_data['ds'].max()
                 historical_data = prophet_data[prophet_data['ds'] <= last_date]
@@ -379,10 +441,14 @@ def run_multi_group_forecast(df, group_columns, target_column, periods, frequenc
                 
                 forecasts_dict[group_label] = forecast
                 agg_df_dict[group_label] = group_data  # Store for heatmap and detailed view
+                logger.info(f"Group {group_label} processed successfully.")
             except Exception as e:
                 st.warning(f"Could not forecast for {group_label}: {e}")
+                logger.warning(f"Could not forecast for {group_label}: {str(e)}")
+                logger.warning(traceback.format_exc())
         else:
             st.warning(f"Skipping {group_label}: Not enough data (less than 2 non-NaN rows).")
+            logger.warning(f"Skipping {group_label}: Not enough data (less than 2 non-NaN rows).")
     
     ax_compare.set_title(f"{target_column} Forecast Comparison")
     ax_compare.set_xlabel("Date")
@@ -391,19 +457,24 @@ def run_multi_group_forecast(df, group_columns, target_column, periods, frequenc
     ax_compare.legend(loc='upper left', bbox_to_anchor=(1.02, 1), borderaxespad=0)
     plt.gcf().autofmt_xdate()  # Better date formatting on x-axis
     plt.tight_layout()
+    logger.info("Comparison figure created successfully.")
     
     if forecasts_dict:
         group_labels = list(forecasts_dict.keys())
         st.session_state[f"heatmap_data_{group_title}"] = (forecasts_dict, agg_df_dict, group_labels, target_column, group_title)
+        logger.info(f"Stored heatmap data for {group_title}.")
     else:
         st.error("No valid forecasts generated for any group.")
+        logger.error("No valid forecasts generated for any group.")
     
     return fig_compare, forecasts_dict, agg_df
 
 # Dynamic Heatmap with Filtering
 def create_forecast_heatmap(forecasts_dict=None, group_labels=None, target_column=None, group_title=None, agg_df_dict=None):
+    logger.info(f"Creating forecast heatmap for group_title: {group_title}...")
     if not all([forecasts_dict, group_labels, target_column, group_title]):
         st.warning("Missing data for heatmap generation.")
+        logger.warning("Missing data for heatmap generation.")
         return None
     
     st.subheader(f"Forecast Heatmap by {group_title}")
@@ -417,6 +488,7 @@ def create_forecast_heatmap(forecasts_dict=None, group_labels=None, target_colum
     
     if not selected_groups:
         st.warning("Please select at least one group to display the heatmap.")
+        logger.warning("Please select at least one group to display the heatmap.")
         return None
     
     all_forecasts = pd.DataFrame()
@@ -433,20 +505,24 @@ def create_forecast_heatmap(forecasts_dict=None, group_labels=None, target_colum
                 all_forecasts = pd.concat([all_forecasts, forecast_future[['ds', 'yhat', 'group']]])
             else:
                 st.warning(f"No future data for group {group_label} after {last_historical_date}")
+                logger.warning(f"No future data for group {group_label} after {last_historical_date}")
     
     if all_forecasts.empty:
         st.warning("No future forecast data available for the selected groups.")
+        logger.warning("No future forecast data available for the selected groups.")
         return None
     
     pivot_df = all_forecasts.pivot(index='group', columns='ds', values='yhat')
     pivot_df.columns = pivot_df.columns.strftime('%Y-%m-%d')
     
+    logger.info("Creating heatmap figure...")
     fig, ax = plt.subplots(figsize=(14, len(selected_groups) * 0.5 + 2), dpi=300)
     sns.heatmap(pivot_df, cmap="YlGnBu", annot=True, fmt=".0f", linewidths=.5, ax=ax)
     ax.set_title(f"{target_column} Forecast Heatmap by {group_title}")
     ax.set_ylabel("Group")
     ax.set_xlabel("Date")
     plt.tight_layout()
+    logger.info("Heatmap figure created successfully.")
     
     st.pyplot(fig)
     
@@ -460,4 +536,5 @@ def create_forecast_heatmap(forecasts_dict=None, group_labels=None, target_colum
 
 # Convert DataFrame to CSV
 def convert_df_to_csv(df):
+    logger.info("Converting DataFrame to CSV...")
     return df.to_csv(index=False)
