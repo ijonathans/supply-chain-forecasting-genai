@@ -102,7 +102,7 @@ def aggregate_data(df, target_column, frequency='W', group_columns=None):
             df_copy['ds'] = df_copy['ds'].dt.floor('D')
         elif frequency == 'W':
             df_copy['ds'] = df_copy['ds'].dt.to_period('W').dt.to_timestamp()
-        elif frequency == 'M':  # Changed from 'ME' to 'M' for Prophet compatibility
+        elif frequency == 'ME':  # Updated from 'M' to 'ME'
             df_copy['ds'] = df_copy['ds'].dt.to_period('M').dt.to_timestamp()
         else:
             raise ValueError(f"Unsupported frequency: {frequency}")
@@ -110,8 +110,30 @@ def aggregate_data(df, target_column, frequency='W', group_columns=None):
         if group_columns and group_columns[0]:
             groupby_cols = ['ds'] + group_columns
             agg_df = df_copy.groupby(groupby_cols, as_index=False)[target_column].sum()
+            
+            # Ensure continuous dates for each group
+            all_dates = pd.date_range(start=df_copy['ds'].min(), end=df_copy['ds'].max(), freq=frequency)
+            all_groups = df_copy[group_columns].drop_duplicates()
+            
+            # Create a MultiIndex with all combinations of dates and groups
+            multi_index = pd.MultiIndex.from_product(
+                [all_dates] + [all_groups[col] for col in group_columns],
+                names=['ds'] + group_columns
+            )
+            full_df = pd.DataFrame(index=multi_index).reset_index()
+            
+            # Merge with aggregated data and fill missing values
+            agg_df = full_df.merge(agg_df, on=['ds'] + group_columns, how='left')
+            agg_df[target_column] = agg_df[target_column].fillna(0)  # Fill missing sales with 0
         else:
             agg_df = df_copy.groupby('ds', as_index=False)[target_column].sum()
+            
+            # Ensure continuous dates
+            all_dates = pd.date_range(start=df_copy['ds'].min(), end=df_copy['ds'].max(), freq=frequency)
+            full_df = pd.DataFrame({'ds': all_dates})
+            agg_df = full_df.merge(agg_df, on='ds', how='left')
+            agg_df[target_column] = agg_df[target_column].fillna(0)
+        
         return agg_df
     except Exception as e:
         st.error(f"Error aggregating data: {e}")
@@ -152,7 +174,7 @@ def run_forecast(df, target_column, periods, frequency, data_color, forecast_col
     try:
         model = Prophet()
         model.fit(df_prophet)
-        future = model.make_future_dataframe(periods=periods, freq=frequency)
+        future = model.make_future_dataframe(periods=periods, freq=frequency, include_history=True)
         forecast = model.predict(future)
         
         # Calculate appropriate figure width based on number of data points
@@ -333,11 +355,16 @@ def run_multi_group_forecast(df, group_columns, target_column, periods, frequenc
                 last_date = prophet_data['ds'].max()
                 historical_data = prophet_data[prophet_data['ds'] <= last_date]
                 forecast_values = forecast[forecast['ds'] > last_date]
+
+                combined_data = pd.concat([
+                        historical_data.rename(columns={'y': 'value'}),
+                        forecast_full[['ds', 'yhat']].rename(columns={'yhat': 'value'})
+                    ]).drop_duplicates(subset='ds', keep='first')
                 
                 # Plot only if selected_group matches or no filter is applied
                 if selected_group is None or group_label == selected_group:
                     ax_compare.plot(historical_data['ds'], historical_data['y'], '-', color=group_color, alpha=0.5, label=f"{group_label} (Historical)")
-                    ax_compare.plot(forecast_values['ds'], forecast_values['yhat'], '-', color=group_color, label=f"{group_label} (Forecast)")
+                    ax_compare.plot(combined_data['ds'], combined_data['value'], '-', color=group_color, label=f"{group_label} (Forecast)")
                 
                 forecasts_dict[group_label] = forecast
                 agg_df_dict[group_label] = group_data  # Store for heatmap and detailed view
