@@ -164,12 +164,12 @@ def engineer_features(df, target_column, background, columns):
 def run_forecast(df, target_column, periods, frequency, data_color, forecast_color):
     if target_column not in df.columns:
         st.error(f"Target column '{target_column}' not found.")
-        return None, None, None, None
+        return None, None, None, None, None
     
     df_prophet = df[['ds', target_column]].rename(columns={target_column: 'y'})
     if len(df_prophet.dropna()) < 2:
         st.warning(f"Not enough data for forecasting (less than 2 non-NaN rows).")
-        return None, None, None, None
+        return None, None, None, None, None
     
     try:
         model = Prophet()
@@ -180,7 +180,6 @@ def run_forecast(df, target_column, periods, frequency, data_color, forecast_col
         # Calculate appropriate figure width based on number of data points
         num_data_points = len(df_prophet) + periods
         base_width = 10
-        # Adjust width based on data points, with a reasonable maximum
         width_factor = min(max(1, num_data_points / 100), 3)  # Limit to 3x base width
         fig_width = base_width * width_factor
         
@@ -198,7 +197,6 @@ def run_forecast(df, target_column, periods, frequency, data_color, forecast_col
         ax1.set_xlabel('Date')
         ax1.set_ylabel(target_column)
         ax1.grid(True, linestyle='--', alpha=0.7)
-        # Add x-axis date formatting for better readability
         plt.gcf().autofmt_xdate()
         plt.tight_layout()
         
@@ -273,7 +271,7 @@ def run_forecast(df, target_column, periods, frequency, data_color, forecast_col
         return model, forecast, fig1, fig2, plotly_fig
     except Exception as e:
         st.error(f"Error in Prophet model: {e}")
-        return None, None, None, None
+        return None, None, None, None, None
 
 # Generate insights
 def get_insights(forecast, target_column, context):
@@ -297,7 +295,6 @@ def get_insights(forecast, target_column, context):
         return insights
     except Exception as e:
         st.error(f"Error generating insights: {e}")
-        # Provide a fallback insight even when there's an error
         return f"Unable to generate detailed insights due to an error. However, the forecast data suggests monitoring {target_column} closely for upcoming periods as trends may impact business operations."
 
 # Multi-group forecast with descriptive headers and filtering
@@ -347,24 +344,38 @@ def run_multi_group_forecast(df, group_columns, target_column, periods, frequenc
                 prophet_data = group_data[['ds', target_column]].rename(columns={target_column: 'y'})
                 model = Prophet()
                 model.fit(prophet_data)
-                future = pd.DataFrame({
-                    'ds': pd.date_range(start=prophet_data['ds'].max(), periods=periods + 1, freq=frequency)[1:]
-                })
+                future = model.make_future_dataframe(periods=periods, freq=frequency, include_history=True)  # Include history
                 forecast = model.predict(future)
                 
                 last_date = prophet_data['ds'].max()
                 historical_data = prophet_data[prophet_data['ds'] <= last_date]
-                forecast_values = forecast[forecast['ds'] > last_date]
-
+                forecast_full = forecast[forecast['ds'] >= last_date]  # Include the last historical date
+                
+                # Combine historical and forecast data for a continuous line
                 combined_data = pd.concat([
-                        historical_data.rename(columns={'y': 'value'}),
-                        forecast_full[['ds', 'yhat']].rename(columns={'yhat': 'value'})
-                    ]).drop_duplicates(subset='ds', keep='first')
+                    historical_data.rename(columns={'y': 'value'}),
+                    forecast_full[['ds', 'yhat']].rename(columns={'yhat': 'value'})
+                ]).drop_duplicates(subset='ds', keep='first')
                 
                 # Plot only if selected_group matches or no filter is applied
                 if selected_group is None or group_label == selected_group:
-                    ax_compare.plot(historical_data['ds'], historical_data['y'], '-', color=group_color, alpha=0.5, label=f"{group_label} (Historical)")
-                    ax_compare.plot(combined_data['ds'], combined_data['value'], '-', color=group_color, label=f"{group_label} (Forecast)")
+                    # Plot historical part with lower alpha
+                    ax_compare.plot(
+                        historical_data['ds'], 
+                        historical_data['y'], 
+                        '-', 
+                        color=group_color, 
+                        alpha=0.5, 
+                        label=f"{group_label} (Historical)"
+                    )
+                    # Plot the combined line (historical + forecast) to ensure continuity
+                    ax_compare.plot(
+                        combined_data['ds'], 
+                        combined_data['value'], 
+                        '-', 
+                        color=group_color, 
+                        label=f"{group_label} (Forecast)"
+                    )
                 
                 forecasts_dict[group_label] = forecast
                 agg_df_dict[group_label] = group_data  # Store for heatmap and detailed view
@@ -455,338 +466,67 @@ def convert_df_to_csv(df):
 if 'forecast_results' not in st.session_state:
     st.session_state.forecast_results = {}
 
-# Sidebar configuration
+# Sidebar configuration (moved from streamlit_app.py)
 st.sidebar.title("Supply Chain Forecasting")
 st.sidebar.markdown("Configure your forecast parameters below:")
 
-# File upload
-uploaded_file = st.sidebar.file_uploader("Upload your time series data (CSV)", type=["csv"])
-
 # Date column selection
-date_column = st.sidebar.text_input("Date column name", "date")
+st.session_state.date_column = st.sidebar.text_input(
+    "Date column name", 
+    value=st.session_state.date_column if st.session_state.date_column else "Date", 
+    key="date_column_input"
+)
 
 # Context input
-context = st.sidebar.text_area("Dataset context (for better feature engineering)", 
-                               "This is a supply chain dataset with sales data across different stores and departments.")
+st.session_state.context = st.sidebar.text_area(
+    "Dataset context (for better feature engineering)", 
+    "This is a supply chain dataset with sales data across different stores and departments.",
+    key="context_input"
+)
 
 # Target column
-target_column = st.sidebar.text_input("Target column to forecast", "sales")
+st.session_state.target_column = st.sidebar.text_input(
+    "Target column to forecast", 
+    "Weekly_Sales", 
+    key="target_column_input"
+)
 
 # Group columns
-group_column_input = st.sidebar.text_input("Group columns (comma-separated)", "store,dept")
-selected_group_columns = [col.strip() for col in group_column_input.split(",")] if group_column_input else []
+group_column_input = st.sidebar.text_input(
+    "Group columns (comma-separated)", 
+    "Store,Dept", 
+    key="group_columns_input"
+)
+st.session_state.selected_group_columns = [col.strip() for col in group_column_input.split(",")] if group_column_input else []
 
 # Forecast parameters
-periods = st.sidebar.slider("Forecast periods", 1, 52, 12)
-frequency_options = ["D", "W", "M"]
-frequency = st.sidebar.selectbox("Frequency", frequency_options, index=1)
+st.session_state.periods = st.sidebar.slider(
+    "Forecast periods", 
+    1, 52, 12, 
+    key="periods_slider"
+)
+frequency_options = ["D", "W", "M"]  # Changed 'ME' to 'M' for Prophet compatibility
+st.session_state.frequency = st.sidebar.selectbox(
+    "Frequency", 
+    frequency_options, 
+    index=1, 
+    key="frequency_select"
+)
 
 # Colors
-data_color = st.sidebar.color_picker("Historical data color", "#1f77b4")
-forecast_color = st.sidebar.color_picker("Forecast color", "#ff7f0e")
+st.session_state.data_color = st.sidebar.color_picker(
+    "Historical data color", 
+    "#1f77b4", 
+    key="data_color_picker"
+)
+st.session_state.forecast_color = st.sidebar.color_picker(
+    "Forecast color", 
+    "#ff7f0e", 
+    key="forecast_color_picker"
+)
 
 # Run button
-run_button = st.sidebar.button("Generate Forecast")
-
-# Load data
-df = None
-columns = []
-if uploaded_file:
-    try:
-        df, columns = load_data(uploaded_file, date_column)
-        st.sidebar.success(f"Data loaded successfully: {len(df)} rows, {len(columns)} columns")
-    except Exception as e:
-        st.sidebar.error(f"Error loading data: {str(e)}")
-
-# Main content area
-if df is None and not st.session_state.forecast_results:
-    st.info("Please upload a CSV file with time series data to begin.")
-    
-    # Sample data description
-    st.markdown("### Sample Data Format")
-    st.markdown("""
-    Your CSV file should contain at least:
-    - A date column (can be renamed using the 'Date column name' field)
-    - A target column to forecast (e.g., sales, demand, inventory)
-    - Optional: Group columns for segmented forecasting (e.g., store, department, product)
-    """)
-    
-    # Example usage
-    st.markdown("### Example Usage")
-    st.markdown("""
-    1. Upload your CSV file
-    2. Specify the date column name
-    3. Provide context about your dataset
-    4. Enter the target column to forecast
-    5. Optionally add group columns for segmented analysis
-    6. Set forecast periods and frequency
-    7. Click 'Generate Forecast'
-    """)
-
-# Run forecasting when button is clicked
-if run_button and df is not None:
-    with st.spinner("Generating forecasts..."):
-        try:
-            df = engineer_features(df, target_column, context, columns)
-            
-            # Create a placeholder for results
-            results_dict = {
-                'df': df,
-                'target_column': target_column,
-                'periods': periods,
-                'frequency': frequency,
-                'context': context
-            }
-            
-            # Single forecast (no grouping)
-            if not selected_group_columns or not selected_group_columns[0]:
-                agg_df = aggregate_data(df, target_column, frequency)
-                model, forecast, fig1, fig2, plotly_fig = run_forecast(agg_df, target_column, periods, frequency, data_color, forecast_color)
-                if model and forecast is not None:
-                    results_dict['single'] = (fig1, forecast, plotly_fig)
-                    st.session_state.forecast_results = results_dict
-                    st.experimental_rerun()
-            
-            # Multi-group forecasting
-            else:
-                # Primary group forecasting
-                primary_fig, primary_forecasts, primary_agg_df = run_multi_group_forecast(
-                    df, [selected_group_columns[0]], target_column, periods, frequency, 
-                    context, data_color, forecast_color, top_n=10
-                )
-                results_dict['primary'] = (primary_fig, primary_forecasts, primary_agg_df)
-                
-                # Secondary group forecasting (if available)
-                if len(selected_group_columns) >= 2:
-                    secondary_fig, secondary_forecasts, secondary_agg_df = run_multi_group_forecast(
-                        df, [selected_group_columns[1]], target_column, periods, frequency, 
-                        context, data_color, forecast_color, top_n=10
-                    )
-                    results_dict['secondary'] = (secondary_fig, secondary_forecasts, secondary_agg_df)
-                
-                # Combined group forecasting
-                combined_fig, combined_forecasts, combined_agg_df = run_multi_group_forecast(
-                    df, selected_group_columns, target_column, periods, frequency, 
-                    context, data_color, forecast_color, top_n=10
-                )
-                results_dict['combined'] = (combined_fig, combined_forecasts, combined_agg_df)
-                
-                st.session_state.forecast_results = results_dict
-                st.experimental_rerun()
-        except Exception as e:
-            st.error(f"Error in forecast generation: {str(e)}")
-            st.code(traceback.format_exc())
-
-# Display results if available
-if 'forecast_results' in st.session_state and st.session_state.forecast_results:
-    results = st.session_state.forecast_results
-    df = results['df']
-    target_column = results['target_column']
-    periods = results['periods']
-    frequency = results.get('frequency', 'W')
-    context = results.get('context', '')
-    
-    # Filter options
-    filter_options = []
-    if 'single' in results:
-        filter_options.append("Overall (No Grouping)")
-    
-    if selected_group_columns:
-        if 'combined' in results:
-            filter_options.append(f"Combined ({' & '.join(selected_group_columns)})")
-        if 'primary' in results:
-            filter_options.append(selected_group_columns[0])
-        if 'secondary' in results and len(selected_group_columns) >= 2:
-            filter_options.append(selected_group_columns[1])
-    
-    selected_filter = st.selectbox("View forecast by", filter_options)
-    
-    # Display based on filter selection
-    if selected_filter == "Overall (No Grouping)" and 'single' in results:
-        fig1, forecast, plotly_fig = results['single']
-        st.subheader("Overall Forecast")
-        if fig1:
-            st.pyplot(fig1)
-        else:
-            st.warning("No forecast plot generated.")
-        
-        if forecast is not None:
-            st.subheader("Forecast Details")
-            st.write(forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail())
-            st.write("Insights:", get_insights(forecast, target_column, context))
-            
-            # Download button
-            st.download_button(
-                label="Download Forecast CSV",
-                data=convert_df_to_csv(forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']]),
-                file_name=f"forecast_{target_column}.csv",
-                mime="text/csv",
-            )
-            
-            # Interactive Plotly figure
-            st.subheader("Interactive Forecast")
-            st.plotly_chart(plotly_fig, use_container_width=True)
-    
-    elif selected_group_columns:
-        if selected_filter == f"Combined ({' & '.join(selected_group_columns)})" and 'combined' in results:
-            combined_fig, combined_forecasts, combined_agg_df = results['combined']
-            st.subheader(f"Forecast Results by {' & '.join(selected_group_columns)}")
-            st.write(f"Aggregated data ({frequency} frequency):")
-            st.dataframe(combined_agg_df.head())
-            if combined_fig:
-                st.pyplot(combined_fig)
-            else:
-                st.warning("No comparison plot generated for Combined view.")
-            
-            if combined_forecasts:
-                group_title = " & ".join(selected_group_columns)
-                group_labels = list(combined_forecasts.keys())
-                selected_group = st.selectbox(
-                    f"Select {group_title} to view",
-                    options=["All"] + group_labels,
-                    key="combined_group_select"
-                )
-                
-                if f"heatmap_data_{group_title}" in st.session_state:
-                    forecasts_dict, agg_df_dict, all_labels, target_col, title = st.session_state[f"heatmap_data_{group_title}"]
-                    heatmap_fig = create_forecast_heatmap(forecasts_dict, all_labels, target_col, title, agg_df_dict)
-                    if not heatmap_fig:
-                        st.warning("Heatmap generation failed.")
-                
-                all_forecasts = pd.concat([forecast[['ds', 'yhat']].assign(group=group) for group, forecast in combined_forecasts.items()])
-                st.download_button(
-                    label=f"Download {group_title} Forecasts",
-                    data=convert_df_to_csv(all_forecasts),
-                    file_name=f"{group_title}_forecasts_{target_column}.csv",
-                    mime="text/csv",
-                )
-                
-                if selected_group != "All":
-                    st.subheader(f"Detailed Forecast for {selected_group}")
-                    forecast = combined_forecasts[selected_group]
-                    st.write(forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail())
-                    st.write("Insights:", get_insights(forecast, target_column, context))
-                    
-                    # Extract group values for filtering
-                    group_data = combined_agg_df
-                    parts = selected_group.split(' & ')
-                    for i, part in enumerate(parts):
-                        col_val = part.split('=')
-                        if len(col_val) == 2:
-                            group_data = group_data[group_data[selected_group_columns[i]] == col_val[1]]
-                    
-                    st.write(f"Detailed view for {selected_group} has {len(group_data)} rows")
-                    st.write(f"Group data sample:\n{group_data.head()}")
-                    
-                    model, _, fig1, fig2, plotly_fig = run_forecast(group_data, target_column, periods, frequency, data_color, forecast_color)
-                    if fig1:
-                        st.pyplot(fig1)
-                    if fig2:
-                        st.pyplot(fig2)
-                    st.plotly_chart(plotly_fig, use_container_width=True)
-        
-        elif selected_filter == selected_group_columns[0] and 'primary' in results:
-            primary_fig, primary_forecasts, primary_agg_df = results['primary']
-            st.subheader(f"Forecast Results by {selected_group_columns[0]}")
-            st.write(f"Aggregated data ({frequency} frequency):")
-            st.dataframe(primary_agg_df.head())
-            if primary_fig:
-                st.pyplot(primary_fig)
-            else:
-                st.warning("No comparison plot generated for Primary.")
-            
-            if primary_forecasts:
-                group_title = selected_group_columns[0]
-                group_labels = list(primary_forecasts.keys())
-                selected_group = st.selectbox(
-                    f"Select {selected_group_columns[0]} to view",
-                    options=["All"] + group_labels,
-                    key="primary_group_select"
-                )
-                
-                if f"heatmap_data_{group_title}" in st.session_state:
-                    forecasts_dict, agg_df_dict, all_labels, target_col, title = st.session_state[f"heatmap_data_{group_title}"]
-                    heatmap_fig = create_forecast_heatmap(forecasts_dict, all_labels, target_col, title, agg_df_dict)
-                    if not heatmap_fig:
-                        st.warning("Heatmap generation failed.")
-                
-                all_forecasts = pd.concat([forecast[['ds', 'yhat']].assign(group=group) for group, forecast in primary_forecasts.items()])
-                st.download_button(
-                    label=f"Download {selected_group_columns[0]} Forecasts",
-                    data=convert_df_to_csv(all_forecasts),
-                    file_name=f"{selected_group_columns[0]}_forecasts_{target_column}.csv",
-                    mime="text/csv",
-                )
-                
-                if selected_group != "All":
-                    st.subheader(f"Detailed Forecast for {selected_group}")
-                    forecast = primary_forecasts[selected_group]
-                    st.write(forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail())
-                    st.write("Insights:", get_insights(forecast, target_column, context))
-                    
-                    group_data = primary_agg_df[primary_agg_df[selected_group_columns[0]] == selected_group]
-                    st.write(f"Detailed view for {selected_group} has {len(group_data)} rows")
-                    st.write(f"Group data sample:\n{group_data.head()}")
-                    
-                    model, _, fig1, fig2, plotly_fig = run_forecast(group_data, target_column, periods, frequency, data_color, forecast_color)
-                    if fig1:
-                        st.pyplot(fig1)
-                    if fig2:
-                        st.pyplot(fig2)
-                    st.plotly_chart(plotly_fig, use_container_width=True)
-        
-        elif len(selected_group_columns) >= 2 and selected_filter == selected_group_columns[1] and 'secondary' in results:
-            secondary_fig, secondary_forecasts, secondary_agg_df = results['secondary']
-            st.subheader(f"Forecast Results by {selected_group_columns[1]}")
-            st.write(f"Aggregated data ({frequency} frequency):")
-            st.dataframe(secondary_agg_df.head())
-            if secondary_fig:
-                st.pyplot(secondary_fig)
-            else:
-                st.warning("No comparison plot generated for Secondary.")
-            
-            if secondary_forecasts:
-                group_title = selected_group_columns[1]
-                group_labels = list(secondary_forecasts.keys())
-                selected_group = st.selectbox(
-                    f"Select {selected_group_columns[1]} to view",
-                    options=["All"] + group_labels,
-                    key="secondary_group_select"
-                )
-                
-                if f"heatmap_data_{group_title}" in st.session_state:
-                    forecasts_dict, agg_df_dict, all_labels, target_col, title = st.session_state[f"heatmap_data_{group_title}"]
-                    heatmap_fig = create_forecast_heatmap(forecasts_dict, all_labels, target_col, title, agg_df_dict)
-                    if not heatmap_fig:
-                        st.warning("Heatmap generation failed.")
-                
-                all_forecasts = pd.concat([forecast[['ds', 'yhat']].assign(group=group) for group, forecast in secondary_forecasts.items()])
-                st.download_button(
-                    label=f"Download {selected_group_columns[1]} Forecasts",
-                    data=convert_df_to_csv(all_forecasts),
-                    file_name=f"{selected_group_columns[1]}_forecasts_{target_column}.csv",
-                    mime="text/csv",
-                )
-                
-                if selected_group != "All":
-                    st.subheader(f"Detailed Forecast for {selected_group}")
-                    forecast = secondary_forecasts[selected_group]
-                    st.write(forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail())
-                    st.write("Insights:", get_insights(forecast, target_column, context))
-                    
-                    group_data = secondary_agg_df[secondary_agg_df[selected_group_columns[1]] == selected_group]
-                    st.write(f"Detailed view for {selected_group} has {len(group_data)} rows")
-                    st.write(f"Group data sample:\n{group_data.head()}")
-                    
-                    model, _, fig1, fig2, plotly_fig = run_forecast(group_data, target_column, periods, frequency, data_color, forecast_color)
-                    if fig1:
-                        st.pyplot(fig1)
-                    if fig2:
-                        st.pyplot(fig2)
-                    st.plotly_chart(plotly_fig, use_container_width=True)
-
-# Reset button
-if st.session_state.forecast_results:
-    if st.sidebar.button("Reset Application"):
-        st.session_state.forecast_results = {}
-        st.experimental_rerun()
+st.session_state.run_button = st.sidebar.button(
+    "Generate Forecast", 
+    key="generate_forecast_button"
+)
