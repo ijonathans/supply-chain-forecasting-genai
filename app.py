@@ -321,7 +321,7 @@ def run_multi_group_forecast(df, group_columns, target_column, periods, frequenc
     agg_df_dict = {}  # Store aggregated data per group
     
     if len(group_columns if not filter_group else [filter_group]) == 1:
-        group_values = agg_df[group_columns[0] if not filter_group else filter_group].value_counts().nlargest(top_n).index.tolist()
+        group_values = agg_df[group_columns[0] if not filter_group else [filter_group]].value_counts().nlargest(top_n).index.tolist()
         combined_groups = [(val,) for val in group_values]
     else:
         group_sums = agg_df.groupby(group_columns)[target_column].sum().nlargest(top_n)
@@ -461,72 +461,3 @@ def create_forecast_heatmap(forecasts_dict=None, group_labels=None, target_colum
 # Convert DataFrame to CSV
 def convert_df_to_csv(df):
     return df.to_csv(index=False)
-
-# Initialize session state
-if 'forecast_results' not in st.session_state:
-    st.session_state.forecast_results = {}
-
-# Sidebar configuration (moved from streamlit_app.py)
-st.sidebar.title("Supply Chain Forecasting")
-st.sidebar.markdown("Configure your forecast parameters below:")
-
-# Date column selection
-st.session_state.date_column = st.sidebar.text_input(
-    "Date column name", 
-    value=st.session_state.date_column if st.session_state.date_column else "Date", 
-    key="date_column_input"
-)
-
-# Context input
-st.session_state.context = st.sidebar.text_area(
-    "Dataset context (for better feature engineering)", 
-    "This is a supply chain dataset with sales data across different stores and departments.",
-    key="context_input"
-)
-
-# Target column
-st.session_state.target_column = st.sidebar.text_input(
-    "Target column to forecast", 
-    "Weekly_Sales", 
-    key="target_column_input"
-)
-
-# Group columns
-group_column_input = st.sidebar.text_input(
-    "Group columns (comma-separated)", 
-    "Store,Dept", 
-    key="group_columns_input"
-)
-st.session_state.selected_group_columns = [col.strip() for col in group_column_input.split(",")] if group_column_input else []
-
-# Forecast parameters
-st.session_state.periods = st.sidebar.slider(
-    "Forecast periods", 
-    1, 52, 12, 
-    key="periods_slider"
-)
-frequency_options = ["D", "W", "M"]  # Changed 'ME' to 'M' for Prophet compatibility
-st.session_state.frequency = st.sidebar.selectbox(
-    "Frequency", 
-    frequency_options, 
-    index=1, 
-    key="frequency_select"
-)
-
-# Colors
-st.session_state.data_color = st.sidebar.color_picker(
-    "Historical data color", 
-    "#1f77b4", 
-    key="data_color_picker"
-)
-st.session_state.forecast_color = st.sidebar.color_picker(
-    "Forecast color", 
-    "#ff7f0e", 
-    key="forecast_color_picker"
-)
-
-# Run button
-st.session_state.run_button = st.sidebar.button(
-    "Generate Forecast", 
-    key="generate_forecast_button"
-)

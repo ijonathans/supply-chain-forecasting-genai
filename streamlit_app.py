@@ -66,21 +66,108 @@ try:
     
     # Initialize session state
     if 'forecast_results' not in st.session_state:
-        st.session_state.forecast_results = None
+        st.session_state.forecast_results = {}
 
     if 'date_column' not in st.session_state:
-        st.session_state.date_column = ""
+        st.session_state.date_column = "Date"
 
-    # Main content area
-    if 'forecast_results' not in st.session_state:
-        st.session_state.forecast_results = {}
+    if 'context' not in st.session_state:
+        st.session_state.context = "This is a supply chain dataset with sales data across different stores and departments."
+
+    if 'target_column' not in st.session_state:
+        st.session_state.target_column = "Weekly_Sales"
+
+    if 'selected_group_columns' not in st.session_state:
+        st.session_state.selected_group_columns = []
+
+    if 'periods' not in st.session_state:
+        st.session_state.periods = 12
+
+    if 'frequency' not in st.session_state:
+        st.session_state.frequency = "W"
+
+    if 'data_color' not in st.session_state:
+        st.session_state.data_color = "#1f77b4"
+
+    if 'forecast_color' not in st.session_state:
+        st.session_state.forecast_color = "#ff7f0e"
+
+    if 'run_button' not in st.session_state:
+        st.session_state.run_button = False
+
+    # Sidebar configuration
+    st.sidebar.title("Supply Chain Forecasting")
+    st.sidebar.markdown("Configure your forecast parameters below:")
     
-    # Sidebar configuration (moved to app.py, so removed here)
+    # File upload
+    uploaded_file = st.sidebar.file_uploader("Upload your time series data (CSV)", type=["csv"], key="csv_uploader")
+    
+    # Date column selection
+    st.session_state.date_column = st.sidebar.text_input(
+        "Date column name", 
+        value=st.session_state.date_column,
+        key="date_column_input"
+    )
+    
+    # Context input
+    st.session_state.context = st.sidebar.text_area(
+        "Dataset context (for better feature engineering)", 
+        value=st.session_state.context,
+        key="context_input"
+    )
+    
+    # Target column
+    st.session_state.target_column = st.sidebar.text_input(
+        "Target column to forecast", 
+        value=st.session_state.target_column,
+        key="target_column_input"
+    )
+    
+    # Group columns
+    group_column_input = st.sidebar.text_input(
+        "Group columns (comma-separated)", 
+        value=",".join(st.session_state.selected_group_columns) if st.session_state.selected_group_columns else "Store,Dept",
+        key="group_columns_input"
+    )
+    st.session_state.selected_group_columns = [col.strip() for col in group_column_input.split(",")] if group_column_input else []
+    
+    # Forecast parameters
+    st.session_state.periods = st.sidebar.slider(
+        "Forecast periods", 
+        1, 52, 
+        value=st.session_state.periods, 
+        key="periods_slider"
+    )
+    frequency_options = ["D", "W", "M"]
+    st.session_state.frequency = st.sidebar.selectbox(
+        "Frequency", 
+        frequency_options, 
+        index=frequency_options.index(st.session_state.frequency) if st.session_state.frequency in frequency_options else 1,
+        key="frequency_select"
+    )
+    
+    # Colors
+    st.session_state.data_color = st.sidebar.color_picker(
+        "Historical data color", 
+        value=st.session_state.data_color, 
+        key="data_color_picker"
+    )
+    st.session_state.forecast_color = st.sidebar.color_picker(
+        "Forecast color", 
+        value=st.session_state.forecast_color, 
+        key="forecast_color_picker"
+    )
+    
+    # Run button
+    st.session_state.run_button = st.sidebar.button(
+        "Generate Forecast", 
+        key="generate_forecast_button"
+    )
     
     # Load data
     df = None
     columns = []
-    if uploaded_file := st.sidebar.file_uploader("Upload your time series data (CSV)", type=["csv"], key="csv_uploader"):
+    if uploaded_file:
         # Always read and display the original columns first
         original_df = pd.read_csv(uploaded_file)
         original_columns = original_df.columns.tolist()
@@ -149,7 +236,7 @@ try:
         """)
     
     # Run forecasting when button is clicked
-    if st.session_state.get('run_button') and df is not None:
+    if st.session_state.run_button and df is not None:
         with st.spinner("Generating forecasts..."):
             try:
                 df = engineer_features(df, st.session_state.target_column, st.session_state.context, columns)
@@ -480,7 +567,15 @@ try:
     if st.session_state.forecast_results:
         if st.sidebar.button("Reset Application", key="reset_app_button"):
             st.session_state.forecast_results = {}
-            st.session_state.date_column = ""
+            st.session_state.date_column = "Date"
+            st.session_state.context = "This is a supply chain dataset with sales data across different stores and departments."
+            st.session_state.target_column = "Weekly_Sales"
+            st.session_state.selected_group_columns = []
+            st.session_state.periods = 12
+            st.session_state.frequency = "W"
+            st.session_state.data_color = "#1f77b4"
+            st.session_state.forecast_color = "#ff7f0e"
+            st.session_state.run_button = False
             st.experimental_rerun()
             
 except Exception as e:
