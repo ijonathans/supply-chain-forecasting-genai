@@ -277,9 +277,10 @@ if st.session_state.run_button and df is not None:
     logger.info("Generate Forecast button clicked. Starting forecast generation...")
     with st.spinner("Generating forecasts..."):
         try:
-            logger.info("Running engineer_features...")
-            df = engineer_features(df, st.session_state.target_column, st.session_state.context, columns)
-            logger.info("engineer_features completed successfully.")
+            # Comment out feature engineering to test if it's the source of the crash
+            # logger.info("Running engineer_features...")
+            # df = engineer_features(df, st.session_state.target_column, st.session_state.context, columns)
+            # logger.info("engineer_features completed successfully.")
             
             # Create a placeholder for results
             results_dict = {
